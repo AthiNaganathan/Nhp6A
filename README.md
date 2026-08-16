@@ -10,3 +10,5 @@ OrthologStructures.zip --> The PDB files of the 10 Nhp6A orthologs spanning the 
 
 Hashi_PymolFig_N.pse, Hashi_PymolFig_Nstar.pse --> Structural ensembles of N and N* from the Hashi workflow (https://github.com/AthiNaganathan/Hashi) 
 
+WSME model codes --> https://github.com/AthiNaganathan/WSMEmodel
+
