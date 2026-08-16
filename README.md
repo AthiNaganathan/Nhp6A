@@ -1,6 +1,6 @@
 # Data from 'Switching Functional DNA-Binding Modes by Tuning Protein Order-Disorder Equilibria' 
 
-bioRxiv version --> https://www.biorxiv.org/content/10.64898/2026.08.11.744313v1) 
+bioRxiv version --> https://www.biorxiv.org/content/10.64898/2026.08.11.744313v1 
 
 Github_Nhp6A_Data.xlsx --> Excel file contains all the data used to plot the graphs (except Figure 5)
 
