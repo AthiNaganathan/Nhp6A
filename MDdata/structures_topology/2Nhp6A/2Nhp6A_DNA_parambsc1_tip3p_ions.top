@@ -1,0 +1,51 @@
+;
+;	File '2Nhp6A_DNA_parambsc1_tip3p.top' was generated
+;	At date: Tue Jan 13 10:16:45 2026
+;
+;	This is a standalone topology file
+;
+;	Created by:
+;	                    :-) GROMACS - gmx pdb2gmx, 2019.6 (-:
+;	
+;	Executable:   /home/david/anaconda3/envs/plumed-masterclass/bin/gmx
+;	Data prefix:  /home/david/anaconda3/envs/plumed-masterclass
+;	Command line:
+;	  gmx pdb2gmx -f AF_Nhp6A/2Nhp6A_DNA_AF_fix.pdb -ignh -p 2Nhp6A_DNA_parambsc1_tip3p -o data/2Nhp6A_DNA_parambsc1_tip3p -i 2Nhp6A_DNA_parambsc1_tip3p -n data/2Nhp6A_DNA_parambsc1_tip3p
+;	Force field was read from current directory or a relative path - path added.
+;
+
+; Include forcefield parameters
+#include "./amber14sb_parmbsc1.ff/forcefield.itp"
+
+; Include chain topologies
+#include "2Nhp6A_DNA_parambsc1_tip3p_Protein_chain_A.itp"
+#include "2Nhp6A_DNA_parambsc1_tip3p_Protein_chain_B.itp"
+#include "2Nhp6A_DNA_parambsc1_tip3p_DNA_chain_C.itp"
+#include "2Nhp6A_DNA_parambsc1_tip3p_DNA_chain_D.itp"
+
+; Include water topology
+#include "./amber14sb_parmbsc1.ff/tip3p.itp"
+
+#ifdef POSRES_WATER
+; Position restraint for each water oxygen
+[ position_restraints ]
+;  i funct       fcx        fcy        fcz
+   1    1       1000       1000       1000
+#endif
+
+; Include topology for ions
+#include "./amber14sb_parmbsc1.ff/ions.itp"
+
+[ system ]
+; Name
+Protein
+
+[ molecules ]
+; Compound        #mols
+Protein_chain_A     1
+Protein_chain_B     1
+DNA_chain_C         1
+DNA_chain_D         1
+SOL         14349
+K                55 
+CL               43
