@@ -12,3 +12,5 @@ Hashi_PymolFig_N.pse, Hashi_PymolFig_Nstar.pse --> Structural ensembles of N and
 
 WSME model codes --> https://github.com/AthiNaganathan/WSMEmodel
 
+Non-specific protein-DNA binding model --> https://github.com/AthiNaganathan/Protein_DNA_Binding_Model
+
