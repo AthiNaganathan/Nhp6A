@@ -2,6 +2,12 @@
 
 bioRxiv version --> https://www.biorxiv.org/content/10.64898/2026.08.11.744313v1 
 
+MDdata --> Metadynamics input files, analysis scripts, structures
+
+DSCTwoStateFit --> Two-state analysis of DSC curve with free floating baselines (run TwoStateDSC.m)
+
+GlobalTwoStateFit --> Global two-state analysis of the thermal unfolding curves of the phosphomimetic mutants (run eq2statefit.m)
+
 Github_Nhp6A_Data.xlsx --> Excel file contains all the data used to plot the graphs (except Figure 5)
 
 CoopTmScenarios.m --> A MATLAB script that simulates the different Tm-DHm scenarios shown in Figure 8
