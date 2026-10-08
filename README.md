@@ -2,7 +2,7 @@
 
 bioRxiv version --> https://www.biorxiv.org/content/10.64898/2026.08.11.744313v1 
 
-MDdata --> Metadynamics input files, analysis scripts, structures
+MDdata --> Reproducibility package for the molecular dynamics and metadynamics simulations (Figure 5 and Figure S7). It contains the starting structures (AlphaFold 3 models) and GROMACS topologies (AMBER ff14SB + parmbsc1, TIP3P), the system-preparation scripts, the as-run PLUMED input files, and the full analysis and plotting pipeline (scripts and notebooks), plus PDB files of the representative states shown in the figures. Raw trajectories and HILLS/colvar files are not included because of their size (~60 GB) and are available on request.
 
 DSCTwoStateFit --> Two-state analysis of DSC curve with free floating baselines (run TwoStateDSC.m)
 
