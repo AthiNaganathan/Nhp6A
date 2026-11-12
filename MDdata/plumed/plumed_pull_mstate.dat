@@ -1,0 +1,49 @@
+# DRAFT for review — steered detachment of the folded core (IDR-only m-state probe, PLAN.md A1.2)
+# CONSTRUCTION RUN ONLY. Nothing here is used in production, which is unbiased.
+#
+# One scalar pull: the distance between the core (Calpha 27-93) COM and the DNA COM
+# is increased by 2 nm at 0.05 nm/ns (40 ns). The direction is left to the system;
+# a COM-COM restraint pushes the core straight away from the duplex centre.
+# Per configuration, __D0__ = this distance in the start frame (taken from step 0
+# of this run's own COLVAR) and __D1__ = __D0__ + 2.0.
+#
+# Atom numbering = data/equil/1Nhp6A_holo topology: protein 1-1539, DNA 1540-2489.
+
+# --- keep molecules whole (DNA = both strands as one entity; verified to weld the duplex) ---
+WHOLEMOLECULES ENTITY0=1-1539 ENTITY1=1540-2489
+
+# --- groups ---
+core_com: COM ATOMS=455,465,486,503,523,543,553,567,582,596,620,632,651,667,691,702,717,739,745,757,776,790,810,817,834,850,857,879,901,920,927,942,964,988,1010,1020,1039,1061,1067,1082,1097,1119,1144,1150,1171,1186,1196,1218,1228,1245,1255,1267,1289,1311,1335,1356,1371,1382,1397,1419,1434,1453,1474,1488,1498,1512,1531
+dna_center: COM ATOMS=1540-2489
+dna_end1: COM ATOMS=1540-1570,2459-2489
+dna_end2: COM ATOMS=2024-2051,1990-2023
+
+# --- pulled coordinate ---
+d_core: DISTANCE ATOMS=core_com,dna_center
+
+# --- published n_IDR-DNA CV (identical to coord_tail_dna in the MetaD/monitor inputs) ---
+tail: GROUP ATOMS=5,7,22,24,38,40,57,60,66,68,90,92,110,113,119,121,141,143,163,165,187,189,201,203,215,217,239,241,261,263,283,285,305,307,322,325,331,333,345,347
+dna_backbone: GROUP ATOMS=1548,1571,1581,1604,1614,1637,1647,1670,1680,1702,1712,1735,1745,1767,1777,1799,1809,1831,1841,1864,1874,1896,1906,1928,1938,1958,1968,1990,2000,2032,2052,2062,2084,2094,2117,2127,2149,2159,2181,2191,2211,2221,2243,2253,2275,2285,2307,2317,2337,2347,2369,2379,2399,2409,2429,2439,2459,2469
+coord_tail_dna: COORDINATION GROUPA=tail GROUPB=dna_backbone R_0=0.5 NN=6 MM=12
+
+# --- core-DNA coordination, same form (Calpha+Cbeta 27-93): survival threshold 4.85 ---
+core: GROUP ATOMS=455,457,465,467,486,488,503,505,523,525,543,545,553,555,567,569,582,584,596,598,620,622,632,634,651,653,667,669,691,693,702,704,717,719,736,739,745,747,757,759,776,778,790,792,810,817,819,834,836,850,857,859,879,881,901,903,920,927,929,942,944,964,966,988,990,1010,1012,1020,1022,1039,1041,1058,1061,1067,1069,1082,1084,1097,1099,1119,1121,1141,1144,1150,1152,1171,1173,1186,1188,1196,1198,1218,1220,1228,1230,1245,1247,1255,1257,1267,1269,1289,1291,1311,1313,1335,1337,1356,1358,1371,1373,1382,1384,1397,1399,1419,1421,1434,1436,1453,1455,1474,1476,1488,1490,1498,1500,1512,1514,1531,1533
+coord_core_dna: COORDINATION GROUPA=core GROUPB=dna_backbone R_0=0.5 NN=6 MM=12
+
+# --- monitored only (no force): DNA bending, as in the 1:1 bending panels D/E ---
+theta: ANGLE ATOMS=dna_end1,dna_center,dna_end2
+de2e: DISTANCE ATOMS=dna_end1,dna_end2 NOPBC
+# (cmap is not recomputed here; Q_DNA for the acceptance gate is taken afterwards with
+#  plumed driver --mc on the pull trajectory, using the canonical monitor definition)
+
+# --- BIAS 1: the pull. 20,000,000 steps x 2 fs = 40 ns; 2 nm / 40 ns = 0.05 nm/ns ---
+pull: MOVINGRESTRAINT ARG=d_core ...
+   STEP0=0        AT0=__D0__ KAPPA0=1000.0
+   STEP1=20000000 AT1=__D1__ KAPPA1=1000.0
+...
+
+# --- BIAS 2 (disclosed construction aid): keep the IDR on the DNA while the core leaves ---
+# lower wall at the pooled bound p5 of n_IDR-DNA (11.6); inactive while n_IDR-DNA >= 11.6
+idr_wall: LOWER_WALLS ARG=coord_tail_dna AT=11.6 KAPPA=10.0 EXP=2
+
+PRINT ARG=d_core,coord_tail_dna,coord_core_dna,theta,de2e,pull.bias,pull.work,idr_wall.bias STRIDE=500 FILE=colvar_pull.dat
