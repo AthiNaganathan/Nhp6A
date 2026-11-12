@@ -16,6 +16,8 @@
 #
 # equil mode: reads data/equil/<sys>/rep<i>/{md.tpr,md.xtc} and additionally leaves behind the
 #   PBC-clean viewing trajectory rep<i>/md_proc.{xtc,pdb,gro} (-dt $DT, solute only).
+#   Runs with traceable names instead of md.* (e.g. data/mstate/md/c3/rep0/
+#   1Nhp6A_mstate_md_c3_rep0.{tpr,xtc}) are found by the *_rep<i>.{tpr,xtc} fallback.
 #   Multi-molecule solutes (a DNA duplex is 2 molecules; the 2:1 complex is 4) are NOT made whole
 #   by -pbc mol alone -- the strands/chains stay in different periodic images and every
 #   inter-molecular distance comes out wrong. So equil mode welds the complex with -pbc cluster
@@ -28,12 +30,23 @@
 #   not a viewing trajectory: it tags its xvg (mindist_pi_r<i>_dt<DT>ps[_<b>-<e>ns].xvg) and
 #   leaves rep<i>/md_proc.* untouched, so the provenance of the 1 ns viewing trajectories stands.
 #
+# proc mode: the raw MetaD trajectories live only on the run host, but `process_replica.sh` has
+#   already left a solute-only, whole-molecule copy next to them
+#   (data/<sys>/replica_<i>/*_r<i>_<SUFFIX>.xtc, SUFFIX = proc or vmd). That copy is exactly what
+#   metad mode would rebuild, so proc mode skips the strip entirely and runs mindist -pi straight
+#   on it -- the same shortcut equil mode takes with md_proc.xtc. Its time resolution is whatever
+#   -d was given to process_replica.sh; a coarse stride UNDERSAMPLES image approaches (see the
+#   note in pbc_summary.py), so a near-cut-off verdict from a coarsely strided _proc must be
+#   re-scanned on the run host before it is called clean.
+#
 # Usage:
 #   metad: pbc_mindist_check.sh -d DATADIR -t TPR -p PREFIX [-n NREP] [-g GMX] [-o OUTDIR]
 #   equil: pbc_mindist_check.sh -m equil -d data/equil/2Nhp6A -o analysis/pbc/equil_2nhp6a \
 #                               -s Protein_DNA -n 3 [-D DT_PS] [-g GMX]
 #   fine:  pbc_mindist_check.sh -m equil -d data/equil/2Nhp6A -o analysis/pbc/equil_2nhp6a \
 #                               -s Protein_DNA -r 0 -D 10 [-b 170000 -e 185000] [-k]
+#   proc:  pbc_mindist_check.sh -m proc -d data/1TM_wall -t data/1TM/..._md.tpr \
+#                               -s Protein_DNA -o analysis/pbc/1TM_wall [-O vmd] [-n 6]
 set -u
 
 MODE="metad"
@@ -49,8 +62,9 @@ BEG=""           # equil mode: window start in ps (empty = from the beginning)
 END=""           # equil mode: window end in ps   (empty = to the end)
 REPS=""          # explicit replica list, e.g. "0" or "0,2"; empty = 0..NREP-1
 KEEP=0           # fine runs: 1 = keep the clustered solute trajectory for further analysis
+SUFFIX="proc"    # proc mode: process_replica.sh output suffix (proc | vmd)
 
-while getopts "m:d:t:p:n:g:o:s:D:b:e:r:k" opt; do
+while getopts "m:d:t:p:n:g:o:s:D:b:e:r:O:k" opt; do
     case $opt in
         m) MODE="$OPTARG" ;;
         d) DATADIR="$OPTARG" ;;
@@ -64,6 +78,7 @@ while getopts "m:d:t:p:n:g:o:s:D:b:e:r:k" opt; do
         b) BEG="$OPTARG" ;;
         e) END="$OPTARG" ;;
         r) REPS="$OPTARG" ;;
+        O) SUFFIX="$OPTARG" ;;
         k) KEEP=1 ;;
         *) echo "bad flag"; exit 1 ;;
     esac
@@ -94,8 +109,15 @@ fi
 
 mkdir -p "$OUTDIR"
 
+# equil mode: rep<i>/md.{tpr,xtc}, or else the run's traceable rep<i>/*_rep<i>.{tpr,xtc}
+rep_file() {   # rep_file <i> <ext>
+    local f="$DATADIR/rep$1/md.$2"
+    [ -f "$f" ] || f=$(ls "$DATADIR/rep$1/"*"_rep$1.$2" 2>/dev/null | head -1)
+    echo "$f"
+}
 if [ "$MODE" = "equil" ]; then
-    TPR="$DATADIR/rep0/md.tpr"
+    first=$(echo $REPLIST | awk '{print $1}')
+    TPR=$(rep_file "$first" tpr)
 fi
 [ -f "$TPR" ] || { echo "ERROR: no tpr at $TPR"; exit 1; }
 
@@ -125,10 +147,32 @@ if [ ! -f "$REF" ]; then
         || { echo "ERROR: could not write $REF"; exit 1; }
 fi
 
+if [ "$MODE" = "proc" ]; then
+    for i in $REPLIST; do
+        # Globbed rather than built from $PREFIX: the _proc name carries the run's own tag soup
+        # (_cmap_meta_2D, _cmap_meta_2D_wall, ...) and the replica index is what identifies it.
+        proc=$(ls "$DATADIR/replica_$i/"*"_r${i}_${SUFFIX}.xtc" 2>/dev/null | head -1)
+        [ -n "$proc" ] || { echo "replica $i: no *_r${i}_${SUFFIX}.xtc, skipped"; continue; }
+        xvg="$OUTDIR/mindist_pi_r${i}.xvg"
+        echo "replica $i: $(basename "$proc")"
+        # No trjconv: process_replica.sh already made the solute whole (-pbc cluster for the
+        # complexes, -pbc mol for single-molecule solutes) and wrote only the solute, so the
+        # trajectory already matches $REF atom-for-atom. A mismatch here means $TPR is not the
+        # topology this _proc came from, and mindist fails loudly rather than silently.
+        echo "System" | $GMX mindist -s "$REF" -f "$proc" -pi -tu ns -od "$xvg" -quiet \
+               2>>"$OUTDIR/gmx.log" \
+            || { echo "  mindist FAILED on replica $i (atom-count mismatch vs $REF?)"; continue; }
+        echo "  wrote $xvg"
+    done
+    echo "DONE. xvg columns: time  min_periodic_image_dist  max_internal_dist  box_x box_y box_z"
+    exit 0
+fi
+
 if [ "$MODE" = "equil" ]; then
     for i in $REPLIST; do
         rep="$DATADIR/rep$i"
-        [ -f "$rep/md.xtc" ] || { echo "rep $i: no md.xtc, skipped"; continue; }
+        xtc=$(rep_file "$i" xtc)
+        [ -n "$xtc" ] && [ -f "$xtc" ] || { echo "rep $i: no md.xtc or *_rep$i.xtc, skipped"; continue; }
         clus="$OUTDIR/.cluster_r${i}.xtc"
         xvg="$OUTDIR/mindist_pi_r${i}${TAG}.xvg"
         # A fine run must not overwrite the 1 ns viewing trajectory, so it works on a scratch copy.
@@ -138,11 +182,11 @@ if [ "$MODE" = "equil" ]; then
             proc="$rep/md_proc.xtc"
         fi
 
-        echo "rep $i: $rep/md.xtc -> $proc  (dt $DT ps${WINOPT:+, window$WINOPT ps})"
+        echo "rep $i: $xtc -> $proc  (dt $DT ps${WINOPT:+, window$WINOPT ps})"
         # -pbc cluster asks for two groups: the one to cluster, then the one to write.
         echo ">> rep$i: trjconv -pbc cluster -dt $DT $WINOPT ($SEL)" >>"$OUTDIR/gmx.log"
         printf '%s\n%s\n' "$SEL" "$SEL" \
-            | $GMX trjconv -s "$TPR" -f "$rep/md.xtc" $NDXOPT -pbc cluster -dt "$DT" $WINOPT \
+            | $GMX trjconv -s "$TPR" -f "$xtc" $NDXOPT -pbc cluster -dt "$DT" $WINOPT \
                    -o "$clus" -quiet 2>>"$OUTDIR/gmx.log" \
             || { echo "  trjconv -pbc cluster FAILED on rep $i"; continue; }
 

@@ -1,0 +1,10 @@
+# 1:1 m-state bound mode over 240-250 ns, from analysis/mstate_probe/1Nhp6A_mstate_md_qnative_t250ns.dat (rule: equil_timeseries.bound_mode, REGISTER_Q 0.5)
+# run mode register q_best
+c0_rep0  non-native -      0.028
+c0_rep1  native     0      0.838
+c1_rep0  non-native -      0.033
+c1_rep1  shifted    -2     0.660
+c3_rep0  native     0/-1   0.538
+c3_rep1  non-native -      0.087
+c4_rep0  shifted    -1     0.550
+c4_rep1  non-native -      0.142

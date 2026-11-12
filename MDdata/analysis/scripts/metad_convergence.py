@@ -30,6 +30,9 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from figpaths import figout  # noqa: E402
+
 KJ = "kJ/mol"
 
 
@@ -173,7 +176,8 @@ def main():
                     help="FES cutoff (kJ/mol) defining the well-sampled region")
     ap.add_argument("--princ-col", type=int, default=1,
                     help="colvar column index of principal CV for recrossings")
-    ap.add_argument("--figdir", default="analysis/figures")
+    ap.add_argument("--figdir", default=None,
+                    help="default: routed into figures/<system>/ by figpaths.py")
     ap.add_argument("--version", type=int, default=1,
                     help="figure version suffix _v<N>; bump when the underlying data changed "
                          "(the default silently overwrote _v1 on every re-run)")
@@ -216,9 +220,7 @@ def main():
         ax[1].set_title(f"{args.label}: well-tempered height decay")
         fig.tight_layout()
 
-        os.makedirs(args.figdir, exist_ok=True)
-        figpath = os.path.join(args.figdir,
-                               f"{args.label}_metad_convergence_v{args.version}.png")
+        figpath = figout(f"{args.label}_metad_convergence_v{args.version}.png", args.figdir)
         fig.savefig(figpath, dpi=300)
 
         # ---- summary ----

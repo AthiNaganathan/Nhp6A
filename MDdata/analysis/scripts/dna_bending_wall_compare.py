@@ -1,10 +1,11 @@
 """
 PMFs for the three soft-LOWER_WALLS MetaD systems: DNA-only, 1Nhp6A:DNA, and
 2Nhp6A:DNA -- projected on de2e and on the DNA bend angle, plus per-system
-de2e-vs-bend 2D maps.
+de2e-vs-bend 2D maps. For WT holo + the three point mutants (systems with a
+single coord_tail_dna CV), also projected on n_IDR-DNA contacts.
 
 Reuses the final-bias reweighting machinery in reweight_angle.py (same method
-as analysis_dna_bending.ipynb): each frame is weighted by the converged WT
+as notebooks/analysis_dna_bending.ipynb): each frame is weighted by the converged WT
 bias evaluated on the system's own biased CV(s) (1D de2e for DNA_wall, 2D
 coord_tail_dna+de2e for 1Nhp6A_wall, 3D coord_tail_dna_A+coord_tail_dna_B+de2e
 for 2Nhp6A). theta and de2e are then histogrammed under those weights --
@@ -40,14 +41,16 @@ warnings.filterwarnings("ignore", message="All-NaN slice encountered")
 
 sys.path.insert(0, os.path.dirname(__file__))
 import reweight_angle as rw
+from figpaths import figpath
 
 T = 298.0
 kBT = rw.kBT(T)
 SCRATCH = "analysis"
-os.makedirs("figures", exist_ok=True)
 
 DE2E_RANGE = (2.4, 6.0)
 BEND_RANGE = (0, 90)   # 180 - theta; 0 deg = straight
+NIDR_RANGE = (0, 40)   # coord_tail_dna (n_IDR-DNA contacts); same range as
+                       # article_data.py's COORD_RANGE for the 2D panel E grid
 N_SNAPS = 5
 # Reliability ceiling for truncating reweighted PMFs. The bend angle is a
 # spectator (only de2e / the coordination CVs are biased) so it is only
@@ -59,14 +62,23 @@ N_SNAPS = 5
 # std stays <= this ceiling (see _reliable_run).
 STD_CEIL = 5.0    # kJ/mol (~2 kBT at 298 K)
 
+# Figure version suffix (project rule: bump when the underlying run grew, else
+# overwrite in place). Set by --version; 1 keeps the historical filenames.
+FIG_VERSION = 1
+
+
+def _figpath(stem):
+    """figures/<system>/<stem>_v<N>.png (overlays stay in figures/), N from --version."""
+    return figpath(f"{stem}_v{FIG_VERSION}.png")
+
 COLOR_DNA = "#0072B2"
 COLOR_HMG = "#D55E00"
 COLOR_TRIMER = "#009E73"
 
-# Free-DNA reference: prefer the corrected-CV re-run (DNA_wall2) whenever it is
-# present, falling back to the superseded DNA_wall (4-atom dna_end2, which biased BOTH
+# Free-DNA reference: prefer the corrected-CV re-run (DNA_wall2, SLURM 9180) whenever it is
+# present, falling back to the superseded DNA_wall (buggy 4-atom dna_end2, which biased BOTH
 # de2e and theta -- the two quantities this script compares). This is the same 'auto' rule
-# figure5_data.py applies, so the two pipelines can never disagree on which run is the reference.
+# article_data.py applies, so the two pipelines can never disagree on which run is the reference.
 DNA_DIR = "data/DNA_wall2" if os.path.isdir("data/DNA_wall2") else "data/DNA_wall"
 DNA_KEY = os.path.basename(DNA_DIR)
 
@@ -121,13 +133,33 @@ SYSTEMS = {
         cols={"coord_tail_dna": 1, "de2e": 2, "theta": 3, "cmap": 4},
         biased=["coord_tail_dna", "de2e"], gamma_col=6,
         sh_min=[0, 0], sh_max=[150, 8], sh_bin=[150, 200]),
+    # IDR-only peptide (Nhp6A res 1-23, C-amidated) on the same DNA: same 2D wall
+    # protocol, CVs and colvar layout as 1Nhp6A_wall (LABNOTEBOOK 2026-10-08).
+    "1IDR_wall": dict(
+        label="IDR(1-23):DNA (wall)",
+        colvar=[f"data/1IDR_wall/replica_{i}/colvar_r{i}.dat" for i in range(6)],
+        hills=[f"data/1IDR_wall/hills.dat.{i}" for i in range(6)],
+        cols={"coord_tail_dna": 1, "de2e": 2, "theta": 3, "cmap": 4},
+        biased=["coord_tail_dna", "de2e"], gamma_col=6,
+        sh_min=[0, 0], sh_max=[150, 8], sh_bin=[150, 200]),
+    # Nhp6A delta2-10 deletion (res renumbered 1-84): same 2D wall protocol and colvar
+    # layout as 1Nhp6A_wall, but its tail group is CA+CB of 11 residues (WT: 20), so
+    # its n_IDR-DNA axis is NOT comparable in absolute terms with WT / 1IDR.
+    "1D2_10_wall": dict(
+        label="\u03942-10:DNA (wall)",
+        colvar=[f"data/1D2_10_wall/replica_{i}/colvar_r{i}.dat" for i in range(6)],
+        hills=[f"data/1D2_10_wall/hills.dat.{i}" for i in range(6)],
+        cols={"coord_tail_dna": 1, "de2e": 2, "theta": 3, "cmap": 4},
+        biased=["coord_tail_dna", "de2e"], gamma_col=6,
+        sh_min=[0, 0], sh_max=[150, 8], sh_bin=[150, 200]),
 }
 # Wong colourblind-safe palette; WT keeps its established vermillion.
 COLOR_1S26D = "#CC79A7"   # reddish purple
 COLOR_1T63D = "#E69F00"   # orange
 COLOR_1TM = "#56B4E9"     # sky blue
 colors = {DNA_KEY: COLOR_DNA, "1Nhp6A_wall": COLOR_HMG, "2Nhp6A": COLOR_TRIMER,
-          "1S26D_wall": COLOR_1S26D, "1T63D_wall": COLOR_1T63D, "1TM_wall": COLOR_1TM}
+          "1S26D_wall": COLOR_1S26D, "1T63D_wall": COLOR_1T63D, "1TM_wall": COLOR_1TM,
+          "1IDR_wall": "#000000", "1D2_10_wall": "#882255"}
 
 
 def hills_header(path):
@@ -220,7 +252,7 @@ def snapshot_weights(name, cfg, t_max_ns, n_snaps=N_SNAPS, full=None):
     and `w` are their weights under the bias accumulated up to that same time.
 
     Split out of snapshot_pmf so the same snapshot ensemble can back a PMF along
-    ANY observable in the colvar (e.g. F(coord_tail_dna, bend) for the figure-5
+    ANY observable in the colvar (e.g. F(coord_tail_dna, bend) for the article
     IDR-contact/bending map) without re-running sum_hills per observable.
     """
     ndim = len(cfg["biased"])
@@ -256,12 +288,14 @@ def snapshot_weights(name, cfg, t_max_ns, n_snaps=N_SNAPS, full=None):
 
 def snapshot_pmf(name, cfg, t_max_ns, n_snaps=N_SNAPS):
     """Reweight at n_snaps cumulative-time cutoffs -> mean/std F(de2e),
-    F(bend), and F(de2e, bend) across snapshots (one sum_hills + one
-    reweighting per snapshot serves all three outputs)."""
+    F(bend), F(n_IDR-DNA) [only for systems with a single coord_tail_dna CV],
+    and F(de2e, bend) across snapshots (one sum_hills + one reweighting per
+    snapshot serves all outputs)."""
     full, snaps = snapshot_weights(name, cfg, t_max_ns, n_snaps)
+    has_nidr = "coord_tail_dna" in full
 
-    de2e_curves, bend_curves, grids2d = [], [], []
-    tx = ty = cd = cb = None
+    de2e_curves, bend_curves, nidr_curves, grids2d = [], [], [], []
+    tx = ty = cd = cb = cn = None
     for s in snaps:
         m, w = s["mask"], s["w"]
         cd, Fd = rw.fes_1d(full["de2e"][m], w, DE2E_RANGE, 80, T)
@@ -272,6 +306,9 @@ def snapshot_pmf(name, cfg, t_max_ns, n_snaps=N_SNAPS):
         bend_curves.append(Fb)
         grids2d.append(F2d)
         tx, ty = txi, tyi
+        if has_nidr:
+            cn, Fn = rw.fes_1d(full["coord_tail_dna"][m], w, NIDR_RANGE, 60, T)
+            nidr_curves.append(Fn)
 
     de2e_curves = np.array(de2e_curves)
     bend_curves = np.array(bend_curves)
@@ -289,9 +326,17 @@ def snapshot_pmf(name, cfg, t_max_ns, n_snaps=N_SNAPS):
     grid2d_mean -= np.nanmin(grid2d_mean)
     grid2d_std = np.nanstd(grids2d, axis=0)
 
-    return dict(cd=cd, de2e_mean=de2e_mean, de2e_std=de2e_std,
-                cb=cb, bend_mean=bend_mean, bend_std=bend_std,
-                tx=tx, ty=ty, grid2d_mean=grid2d_mean, grid2d_std=grid2d_std)
+    out = dict(cd=cd, de2e_mean=de2e_mean, de2e_std=de2e_std,
+               cb=cb, bend_mean=bend_mean, bend_std=bend_std,
+               tx=tx, ty=ty, grid2d_mean=grid2d_mean, grid2d_std=grid2d_std,
+               t_max_ns=t_max_ns, n_snaps=n_snaps)
+    if has_nidr:
+        nidr_curves = np.array(nidr_curves)
+        nidr_mean = np.nanmean(nidr_curves, axis=0)
+        nidr_mean -= np.nanmin(nidr_mean)
+        nidr_std = np.nanstd(nidr_curves, axis=0)
+        out.update(cn=cn, nidr_mean=nidr_mean, nidr_std=nidr_std)
+    return out
 
 
 def _reliable_run(mean, std, ceiling):
@@ -359,7 +404,7 @@ def _band_plot(ax, x, mean, std, color, label=None, std_ceiling=None, ls="-"):
 #   "1to1"  DNA-only vs 1Nhp6A:DNA. Both pass their reweighting gates, and this is the
 #           comparison reported with full credibility.
 #   "all3"  adds the 2:1 trimer. Its PMF is NOT converged -- the reweighting gate fails
-#           (ESS ~ 0%, MAD 4.7 kJ/mol vs a 2.99 threshold), which is why figure5_data.py
+#           (ESS ~ 0%, MAD 4.7 kJ/mol vs a 2.99 threshold), which is why article_data.py
 #           excludes this same run and builds panel F from unbiased equilibrium MD instead.
 #           The 2:1 result of interest is helix destabilisation, and the protein-structure
 #           disruption there is too widespread to capture at the sampling produced so far.
@@ -368,10 +413,69 @@ def _band_plot(ax, x, mean, std, color, label=None, std_ceiling=None, ls="-"):
 #   "mutants"  WT holo vs the three point mutants (all wall, all 6x300 ns, all
 #              converged 2026-08-02). The scientific comparison for the mutant panel:
 #              how S26D / T63D / TM shift the bend and end-to-end PMFs relative to WT.
+#   "d2_10" / "d2_10_idr"  delta2-10 deletion vs WT, and vs WT + IDR-only + free DNA.
+#              Run with --t-max while 1D2_10_wall is still running (time-matched).
 GROUPS = {"1to1": [DNA_KEY, "1Nhp6A_wall"],
           "all3": [DNA_KEY, "1Nhp6A_wall", "2Nhp6A"],
-          "mutants": ["1Nhp6A_wall", "1S26D_wall", "1T63D_wall", "1TM_wall"]}
+          "mutants": ["1Nhp6A_wall", "1S26D_wall", "1T63D_wall", "1TM_wall"],
+          "idr": [DNA_KEY, "1Nhp6A_wall", "1IDR_wall"],
+          "d2_10": ["1Nhp6A_wall", "1D2_10_wall"],
+          "d2_10_idr": [DNA_KEY, "1Nhp6A_wall", "1IDR_wall", "1D2_10_wall"]}
 LOW_CREDIBILITY = {"2Nhp6A"}      # drawn dashed and labelled, wherever it appears
+
+
+def register_truncated(t_max_ns, systems=None):
+    """Time-matched comparison: copy every system's colvars and hills, cut at
+    t <= t_max_ns per walker, into analysis/tmax_t<N>ns/<name>/ and register
+    them as '<name>_t<N>ns' (also in colors and GROUPS), so a still-running
+    system can be compared with finished ones at equal sampling per walker.
+    The suffixed names keep every output (tables, figures, sum_hills scratch)
+    apart from the full-length ones.  Returns the new names for `systems`.
+    """
+    tag = f"_t{t_max_ns:g}ns"
+    names = list(systems) if systems else list(SYSTEMS)
+    root = os.path.join(SCRATCH, f"tmax{tag}")
+
+    def _cut(src, dst):
+        with open(src) as fi, open(dst, "w") as fo:
+            for line in fi:
+                if line.startswith("#"):
+                    fo.write(line)
+                    continue
+                f = line.split()
+                if f and float(f[0]) <= t_max_ns * 1000.0:
+                    fo.write(line)
+        return dst
+
+    def _last_time_ns(path):
+        t = 0.0
+        with open(path) as fi:
+            for line in fi:
+                if not line.startswith("#") and line.strip():
+                    t = float(line.split()[0])
+        return round(t / 1000.0, 1)
+
+    for name in names:
+        cfg = SYSTEMS[name]
+        d = os.path.join(root, name)
+        os.makedirs(d, exist_ok=True)
+        new = dict(cfg)
+        new["colvar"] = [_cut(c, os.path.join(d, os.path.basename(c)))
+                         for c in cfg["colvar"]]
+        # label with the time actually kept: a finished run shorter than
+        # t_max (e.g. DNA_wall2, 100 ns) must not be labelled as t_max
+        t_end = min(_last_time_ns(c) for c in new["colvar"])
+        new["label"] = f"{cfg['label']} [{min(t_max_ns, t_end):g} ns/walker]"
+        new["hills"] = [_cut(h, os.path.join(d, os.path.basename(h)))
+                        for h in cfg["hills"]]
+        SYSTEMS[name + tag] = new
+        colors[name + tag] = colors[name]
+        if name in LOW_CREDIBILITY:
+            LOW_CREDIBILITY.add(name + tag)
+    for g, members in list(GROUPS.items()):
+        GROUPS[g + tag] = [m + tag for m in members]
+        del GROUPS[g]
+    return [n + tag for n in names]
 
 
 def run_all(systems=None):
@@ -406,9 +510,13 @@ def run_all(systems=None):
 
 def write_system_outputs(name, cfg, s):
     """Per-system outputs: F(de2e), F(bend), F(de2e,bend) tables + figures."""
+    # provenance stamp: without the run length these tables cannot be told apart
+    # after an extension (300 vs 350 ns look identical on disk).
+    prov = (f"{cfg['label']} final-bias reweighted, "
+            f"{s['n_snaps']} snapshots, {s['t_max_ns']:.0f} ns/walker\n")
     np.savetxt(f"analysis/{name}_pmf_de2e_mean_std.dat",
                np.column_stack([s["cd"], s["de2e_mean"], s["de2e_std"]]),
-               header="de2e_nm  F_kJmol  std_kJmol")
+               header=prov + "de2e_nm  F_kJmol  std_kJmol")
     fig, ax = plt.subplots(figsize=(6, 4))
     _band_plot(ax, s["cd"], s["de2e_mean"], s["de2e_std"], colors[name],
                std_ceiling=STD_CEIL)
@@ -416,12 +524,12 @@ def write_system_outputs(name, cfg, s):
     ax.set_ylabel(r"$\Delta F$ (kJ/mol)")
     ax.set_title(f"{cfg['label']} " + r"-- $F(d_\mathrm{e-e})$", fontsize=10)
     plt.tight_layout()
-    plt.savefig(f"figures/{name}_pmf_de2e_v1.png", dpi=300, bbox_inches="tight")
+    plt.savefig(_figpath(f"{name}_pmf_de2e"), dpi=300, bbox_inches="tight")
     plt.close()
 
     np.savetxt(f"analysis/{name}_pmf_bend_mean_std.dat",
                np.column_stack([s["cb"], s["bend_mean"], s["bend_std"]]),
-               header="bend_deg(180-theta)  F_kJmol  std_kJmol")
+               header=prov + "bend_deg(180-theta)  F_kJmol  std_kJmol")
     fig, ax = plt.subplots(figsize=(6, 4))
     _band_plot(ax, s["cb"], s["bend_mean"], s["bend_std"], colors[name],
                std_ceiling=STD_CEIL)
@@ -429,8 +537,22 @@ def write_system_outputs(name, cfg, s):
     ax.set_ylabel(r"$\Delta F$ (kJ/mol)")
     ax.set_title(f"{cfg['label']} -- $F$(bend)", fontsize=10)
     plt.tight_layout()
-    plt.savefig(f"figures/{name}_pmf_bend_v1.png", dpi=300, bbox_inches="tight")
+    plt.savefig(_figpath(f"{name}_pmf_bend"), dpi=300, bbox_inches="tight")
     plt.close()
+
+    if "nidr_mean" in s:
+        np.savetxt(f"analysis/{name}_pmf_nidr_mean_std.dat",
+                   np.column_stack([s["cn"], s["nidr_mean"], s["nidr_std"]]),
+                   header=prov + "n_IDR_DNA  F_kJmol  std_kJmol")
+        fig, ax = plt.subplots(figsize=(6, 4))
+        _band_plot(ax, s["cn"], s["nidr_mean"], s["nidr_std"], colors[name],
+                   std_ceiling=STD_CEIL)
+        ax.set_xlabel(r"$n_\mathrm{IDR-DNA}$ contacts")
+        ax.set_ylabel(r"$\Delta F$ (kJ/mol)")
+        ax.set_title(f"{cfg['label']} " + r"-- $F(n_\mathrm{IDR-DNA})$", fontsize=10)
+        plt.tight_layout()
+        plt.savefig(_figpath(f"{name}_pmf_nidr"), dpi=300, bbox_inches="tight")
+        plt.close()
 
     fig, axes = plt.subplots(1, 2, figsize=(10, 4.2))
     # mask the mean map to the reliable region (std <= STD_CEIL, connected
@@ -458,21 +580,22 @@ def write_system_outputs(name, cfg, s):
         a.set_ylabel(r"bend $180-\theta$ (deg)", fontsize=11)
     fig.suptitle(f"{cfg['label']} " + r"-- $F(d_\mathrm{e-e}$, bend), reweighted", y=1.02)
     plt.tight_layout()
-    plt.savefig(f"figures/{name}_pmf2d_de2e_bend_v1.png", dpi=300, bbox_inches="tight")
+    plt.savefig(_figpath(f"{name}_pmf2d_de2e_bend"), dpi=300, bbox_inches="tight")
     plt.close()
-    print(f"{name}: saved pmf_de2e, pmf_bend, pmf2d_de2e_bend")
+    extra = ", pmf_nidr" if "nidr_mean" in s else ""
+    print(f"{name}: saved pmf_de2e, pmf_bend{extra}, pmf2d_de2e_bend")
 
 
-# ── SI panel: Figure-5 Panel-E analog for holo + point mutants ──────────────────
-# F(n_IDR-DNA contacts, bend), on the SAME grid figure5_data.py uses for the
+# ── SI panel: Panel-E analog for holo + point mutants ──────────────────
+# F(n_IDR-DNA contacts, bend), on the SAME grid article_data.py uses for the
 # main-text holo panel E (COORD_RANGE x BEND_RANGE, E_BINS), so the supplementary
-# mutant panels are drawn on axes directly comparable to the paper's Figure 5E.
+# mutant panels are drawn on axes directly comparable to the paper's 1:1 Panel E.
 COORD_RANGE = (0, 40)
 E_BINS = [50, 50]
 
 
 def _save2d(path, x, y, mean, std, counts, header, walkers=None):
-    """Long format read by figure5_plot.load2d: cv1 cv2 F_mean F_std count [n_walkers].
+    """Long format read by article_plot.load2d: cv1 cv2 F_mean F_std count [n_walkers].
     The optional 6th column (n_walkers) carries the multi-walker ergodicity check."""
     X, Y = np.meshgrid(x, y, indexing="ij")
     stack = [X.ravel(), Y.ravel(), mean.ravel(), std.ravel(), counts.ravel()]
@@ -482,8 +605,9 @@ def _save2d(path, x, y, mean, std, counts, header, walkers=None):
     print(f"  wrote {path}  ({len(x)}x{len(y)} bins)")
 
 
-def _walker_coverage(cfg, mins, maxs, bins, min_fr=50):
-    """Per-bin count of walkers that INDEPENDENTLY sample each (coord_tail_dna, bend) bin
+def _walker_coverage(cfg, mins, maxs, bins, min_fr=50, xcv="coord_tail_dna"):
+    """Per-bin count of walkers that INDEPENDENTLY sample each (xcv, bend) bin (xcv =
+    coord_tail_dna by default, or de2e for the DNA-only run; mins/maxs = x/y ranges)
     with at least min_fr frames -- a multi-walker ergodicity check on the E-grid. A bin
     reached by only 1-2 of the 6 walkers is not an equilibrated free-energy estimate even
     when densely populated overall (the S26D low-bend/high-contact corner: 2/6 walkers,
@@ -493,20 +617,90 @@ def _walker_coverage(cfg, mins, maxs, bins, min_fr=50):
     for c in cfg["colvar"]:
         d = rw.load_colvar(c, cfg["cols"])
         bend = 180.0 - np.degrees(d["theta"])
-        h, _, _ = np.histogram2d(d["coord_tail_dna"], bend, bins=bins,
+        h, _, _ = np.histogram2d(d[xcv], bend, bins=bins,
                                  range=[mins, maxs])
         cov += (h >= min_fr).astype(int)
     return cov
 
 
-def write_idrdna_bend_2d(name, cfg=None, n_snaps=N_SNAPS):
-    """SI Panel-E analog: reweighted F(n_IDR-DNA, bend) for a holo/mutant system.
+# The region diagnosed non-ergodic in S26D on 2026-08-02: low DNA bend with the IDR
+# still heavily engaged with the DNA.  Kept as module constants so the audit below and
+# any figure caption quote the SAME box.
+CORNER_BEND_MAX = 25.0   # deg
+CORNER_NIDR_MIN = 25.0   # contacts
 
-    Reuses the SAME snapshot reweighting as the de2e/bend PMFs (snapshot_weights)
-    and the SAME grid as figure5_data.py's panel E, then writes a 5-column table
-    -> analysis/<name>_pmf2d_idrdna_bend.dat that figure5_plot.load2d reads. Only
-    defined for systems whose biased CVs include coord_tail_dna (WT holo + the three
-    point mutants); DNA-only and the 2:1 trimer have no single such CV and are skipped.
+
+def corner_audit(name, cfg=None, t_cut_ns=None, min_fr=50):
+    """Per-walker occupancy of the low-bend / high-n_IDR corner, optionally truncated
+    at t_cut_ns per walker.
+
+    This is the check behind the `min_walkers` ergodicity mask: a corner that only one
+    or two of the six walkers ever occupy is not an equilibrated free-energy estimate,
+    however densely it is populated in the pooled data.  `t_cut_ns` lets a longer run be
+    compared against its own earlier truncation on identical footing -- the test of
+    whether extra sampling actually mixed the walkers into the region.
+
+    Returns (rows, cov, corner_mask); rows is one tuple per walker:
+    (walker, n_frames, n_in_corner, occupancy_pct, first_entry_ns, median_time_ns).
+    """
+    cfg = cfg or SYSTEMS[name]
+    if "coord_tail_dna" not in cfg["cols"]:
+        print(f"  [skip {name}: no coord_tail_dna CV]")
+        return None, None, None
+    tag = f"{t_cut_ns:.0f} ns" if t_cut_ns else "full length"
+    print(f"\n{name}  corner audit (bend < {CORNER_BEND_MAX:.0f} deg, "
+          f"n_IDR-DNA > {CORNER_NIDR_MIN:.0f}), {tag}")
+
+    cov = np.zeros(E_BINS, dtype=int)
+    rows, tot_in, tot_all = [], 0, 0
+    for i, c in enumerate(cfg["colvar"]):
+        d = rw.load_colvar(c, cfg["cols"])
+        t = d["time_ns"]
+        keep = np.ones(len(t), bool) if t_cut_ns is None else (t <= t_cut_ns)
+        t = t[keep]
+        nidr = d["coord_tail_dna"][keep]
+        bend = 180.0 - np.degrees(d["theta"][keep])
+        inc = (bend < CORNER_BEND_MAX) & (nidr > CORNER_NIDR_MIN)
+        n = int(inc.sum())
+        rows.append((i, len(t), n, 100.0 * n / len(t),
+                     t[inc].min() if n else np.nan,
+                     np.median(t[inc]) if n else np.nan))
+        tot_in, tot_all = tot_in + n, tot_all + len(t)
+        h, _, _ = np.histogram2d(nidr, bend, bins=E_BINS,
+                                 range=[COORD_RANGE, BEND_RANGE])
+        cov += (h >= min_fr).astype(int)
+
+    print(f"  {'wk':>3} {'frames':>9} {'in_corner':>10} {'occup%':>8} "
+          f"{'1st entry(ns)':>14} {'median t(ns)':>13}")
+    for i, nt, n, frac, entry, med in rows:
+        e = f"{entry:.1f}" if np.isfinite(entry) else "--"
+        m = f"{med:.1f}" if np.isfinite(med) else "--"
+        print(f"  {i:>3} {nt:>9} {n:>10} {frac:>8.2f} {e:>14} {m:>13}")
+    print(f"  pooled occupancy {100.0 * tot_in / tot_all:.2f}%   "
+          f"walkers >=1% : {sum(1 for r in rows if r[3] >= 1.0)}/{len(rows)}")
+
+    ex = np.linspace(*COORD_RANGE, E_BINS[0] + 1)
+    ey = np.linspace(*BEND_RANGE, E_BINS[1] + 1)
+    X, Y = np.meshgrid(0.5 * (ex[:-1] + ex[1:]), 0.5 * (ey[:-1] + ey[1:]),
+                       indexing="ij")
+    corner = (Y < CORNER_BEND_MAX) & (X > CORNER_NIDR_MIN)
+    visited = int((corner & (cov > 0)).sum())
+    print(f"  corner bins visited: {visited}; reached by >=k walkers: " +
+          ", ".join(f"{k}:{int((corner & (cov >= k)).sum())}" for k in range(1, 7)))
+    return rows, cov, corner
+
+
+def corner_snap_doubling(name, cfg=None, n_snaps=(N_SNAPS, 2 * N_SNAPS)):
+    """Cross-snapshot std in the low-bend/high-n_IDR corner as the snapshot count is doubled.
+
+    Companion to `corner_audit`: the walker audit shows *who* samples the corner, this shows
+    whether the reweighted surface there is still moving in time.  If the spread across
+    cumulative-time snapshots GROWS when more snapshots are taken, the region is drifting
+    rather than merely noisy.  Reported over every corner bin with a finite std -- note that
+    this pools a different (larger) bin set than the reliability-masked figure, so the
+    absolute values are not comparable to a run that measured only the surviving bins.
+
+    Prints one line per snapshot count; writes nothing.
     """
     cfg = cfg or SYSTEMS[name]
     if "coord_tail_dna" not in cfg["cols"]:
@@ -514,26 +708,73 @@ def write_idrdna_bend_2d(name, cfg=None, n_snaps=N_SNAPS):
         return
     full = _load_full(cfg)
     t_max = full["time_ns"].max()
-    print(f"processing {name} F(n_IDR-DNA, bend) 2D "
+    print(f"\n{name}  corner snapshot-doubling test (t_max={t_max:.0f} ns)", flush=True)
+
+    ex = np.linspace(*COORD_RANGE, E_BINS[0] + 1)
+    ey = np.linspace(*BEND_RANGE, E_BINS[1] + 1)
+    X, Y = np.meshgrid(0.5 * (ex[:-1] + ex[1:]), 0.5 * (ey[:-1] + ey[1:]), indexing="ij")
+    corner = (Y < CORNER_BEND_MAX) & (X > CORNER_NIDR_MIN)
+
+    for ns in n_snaps:
+        _, snaps = snapshot_weights(name, cfg, t_max, n_snaps=ns, full=full)
+        grids = []
+        for s in snaps:
+            _, _, F = rw.fes_2d(full["coord_tail_dna"][s["mask"]], full["bend_deg"][s["mask"]],
+                                s["w"], COORD_RANGE, BEND_RANGE, E_BINS, T)
+            grids.append(F)
+        with warnings.catch_warnings():        # bins seen in <2 snapshots -> nanstd ddof warning
+            warnings.simplefilter("ignore", RuntimeWarning)
+            std = np.nanstd(np.array(grids), axis=0)
+        vals = std[corner & np.isfinite(std)]
+        print(f"  n_snaps={ns:3d}: corner std median {np.median(vals):6.2f}  "
+              f"mean {np.mean(vals):6.2f} kJ/mol  ({vals.size} bins)", flush=True)
+
+
+# x-axis options for the 2D bend surfaces: CV key -> (range, file tag, axis label)
+BEND_2D_X = {
+    "coord_tail_dna": (COORD_RANGE, "idrdna_bend", "n_IDR_DNA", "n_IDR-DNA"),
+    "de2e":           (DE2E_RANGE,  "de2e_bend",   "de2e_nm",   "de2e"),
+}
+
+
+def write_idrdna_bend_2d(name, cfg=None, n_snaps=N_SNAPS, xcv="coord_tail_dna"):
+    """SI Panel-E analog: reweighted F(xcv, bend) for a 1:1 or DNA-only system.
+
+    xcv = coord_tail_dna (default) -> analysis/<name>_pmf2d_idrdna_bend.dat, the holo
+    panel-E surface; xcv = de2e -> analysis/<name>_pmf2d_de2e_bend.dat, the free-DNA
+    analogue (de2e is its only biased CV; bend stays a reweighted spectator).
+    Reuses the SAME snapshot reweighting as the de2e/bend PMFs (snapshot_weights)
+    and the SAME 50x50 E_BINS grid, then writes a 6-column table that
+    article_plot.load2d reads. Systems without the requested CV (e.g. the 2:1 trimer
+    has no single coord_tail_dna) are skipped.
+    """
+    cfg = cfg or SYSTEMS[name]
+    if xcv not in cfg["cols"]:
+        print(f"  [skip {name}: no {xcv} CV]")
+        return
+    xrange_, tag, xhead, xlab = BEND_2D_X[xcv]
+    full = _load_full(cfg)
+    t_max = full["time_ns"].max()
+    print(f"processing {name} F({xlab}, bend) 2D "
           f"(t_max={t_max:.0f} ns, n_snaps={n_snaps}) ...", flush=True)
     full, snaps = snapshot_weights(name, cfg, t_max, n_snaps=n_snaps, full=full)
 
     grids, ex, ey = [], None, None
     for s in snaps:
-        ex, ey, F = rw.fes_2d(full["coord_tail_dna"][s["mask"]], full["bend_deg"][s["mask"]],
-                              s["w"], COORD_RANGE, BEND_RANGE, E_BINS, T)
+        ex, ey, F = rw.fes_2d(full[xcv][s["mask"]], full["bend_deg"][s["mask"]],
+                              s["w"], xrange_, BEND_RANGE, E_BINS, T)
         grids.append(F)
     G = np.array(grids)
     mean = np.nanmean(G, axis=0)
     mean -= np.nanmin(mean)
     std = np.nanstd(G, axis=0)
-    cnt, _, _ = np.histogram2d(full["coord_tail_dna"], full["bend_deg"],
-                               bins=E_BINS, range=[COORD_RANGE, BEND_RANGE])
-    wcov = _walker_coverage(cfg, COORD_RANGE, BEND_RANGE, E_BINS)
-    _save2d(f"analysis/{name}_pmf2d_idrdna_bend.dat", ex, ey, mean, std, cnt,
-            f"{cfg['label']} F(n_IDR-DNA, bend), final-bias reweighted, {n_snaps} snapshots, "
+    cnt, _, _ = np.histogram2d(full[xcv], full["bend_deg"],
+                               bins=E_BINS, range=[xrange_, BEND_RANGE])
+    wcov = _walker_coverage(cfg, xrange_, BEND_RANGE, E_BINS, xcv=xcv)
+    _save2d(f"analysis/{name}_pmf2d_{tag}.dat", ex, ey, mean, std, cnt,
+            f"{cfg['label']} F({xlab}, bend), final-bias reweighted, {n_snaps} snapshots, "
             f"{t_max:.0f} ns/walker\n"
-            "n_IDR_DNA  bend_deg(180-theta)  F_mean(kJ/mol)  F_std(kJ/mol)  frame_counts  n_walkers",
+            f"{xhead}  bend_deg(180-theta)  F_mean(kJ/mol)  F_std(kJ/mol)  frame_counts  n_walkers",
             walkers=wcov)
 
 
@@ -554,6 +795,10 @@ def load_snap_from_dat(names=None, scratch=SCRATCH):
         d, b = np.loadtxt(fd), np.loadtxt(fb)
         snap[name] = {"cd": d[:, 0], "de2e_mean": d[:, 1], "de2e_std": d[:, 2],
                       "cb": b[:, 0], "bend_mean": b[:, 1], "bend_std": b[:, 2]}
+        fn = f"{scratch}/{name}_pmf_nidr_mean_std.dat"
+        if os.path.exists(fn):
+            n = np.loadtxt(fn)
+            snap[name].update(cn=n[:, 0], nidr_mean=n[:, 1], nidr_std=n[:, 2])
     return snap
 
 
@@ -564,6 +809,8 @@ def overlay_figures(SNAP):
          r"$d_\mathrm{e-e}$ (nm)", r"$F(d_\mathrm{e-e})$"),
         ("bend", "cb", "bend_mean", "bend_std",
          r"DNA bend angle  $180-\theta$ (deg)   [0 deg = straight]", r"$F$(bend)"),
+        ("nidr", "cn", "nidr_mean", "nidr_std",
+         r"$n_\mathrm{IDR-DNA}$ contacts", r"$F(n_\mathrm{IDR-DNA})$"),
     ]
     for group, members in GROUPS.items():
         if any(name not in SNAP for name in members):
@@ -571,10 +818,14 @@ def overlay_figures(SNAP):
             print(f"  [skip group {group}: not reweighted this run: {', '.join(missing)}]")
             continue
         for obs, xk, mk, sk, xlabel, tlabel in overlays:
+            # n_IDR-DNA is only defined for systems with a single coord_tail_dna
+            # CV (holo, point mutants, 1IDR); draw it for the members that have
+            # it, and only when at least two do (DNA-only / the 2:1 trimer lack it).
+            have = [name for name in members if mk in SNAP[name]]
+            if len(have) < 2:
+                continue
             fig, ax = plt.subplots(figsize=(6, 4))
-            for name in members:
-                if name not in SNAP:
-                    continue
+            for name in have:
                 s, cfg = SNAP[name], SYSTEMS[name]
                 low = name in LOW_CREDIBILITY
                 label = cfg["label"] + (" -- not converged" if low else "")
@@ -588,7 +839,7 @@ def overlay_figures(SNAP):
                 title += "   (dashed = reweighting gate fails)"
             ax.set_title(title, fontsize=10)
             plt.tight_layout()
-            out = f"figures/pmf_{obs}_compare_wall_{group}_v1.png"
+            out = _figpath(f"pmf_{obs}_compare_wall_{group}")
             plt.savefig(out, dpi=300, bbox_inches="tight")
             plt.close()
             print(f"  saved {out}")
@@ -601,20 +852,63 @@ if __name__ == "__main__":
                      help="redraw the comparison overlays from the saved per-system PMF "
                           "tables in analysis/, skipping the (expensive) reweighting")
     _ap.add_argument("--idrdna-bend-2d", nargs="*", metavar="SYS", default=None,
-                     help="write the SI Figure-5E-analog F(n_IDR-DNA, bend) 2D tables "
+                     help="write the SI Panel-E-analog F(n_IDR-DNA, bend) 2D tables "
                           "(analysis/<sys>_pmf2d_idrdna_bend.dat) for the given systems and "
                           "exit; with no names, defaults to WT holo + the three point mutants.")
+    _ap.add_argument("--de2e-bend-2d", nargs="*", metavar="SYS", default=None,
+                     help="write reweighted F(de2e, bend) 2D tables "
+                          "(analysis/<sys>_pmf2d_de2e_bend.dat) and exit; with no names, "
+                          f"defaults to the free DNA ({DNA_KEY}).")
     _ap.add_argument("--systems", nargs="+", choices=list(SYSTEMS), default=None,
                      help="restrict reweighting to these systems (default: all). "
                           "Groups missing a member are skipped. Use e.g. "
                           f"'--systems {DNA_KEY} 1Nhp6A_wall' for the converged 1to1 overlay, "
                           "avoiding the slow, gate-failing 2Nhp6A reweighting.")
+    _ap.add_argument("--corner-audit", nargs="*", metavar="SYS", default=None,
+                     help="report per-walker occupancy of the low-bend/high-n_IDR corner "
+                          "for the given systems and exit (the ergodicity check behind the "
+                          "SI min_walkers mask); defaults to the three point mutants + WT.")
+    _ap.add_argument("--t-cut", nargs="+", type=float, default=[None], metavar="NS",
+                     help="with --corner-audit: truncate each walker at these times (ns) "
+                          "so a run can be compared against its own earlier length.")
+    _ap.add_argument("--corner-snap-doubling", nargs="*", metavar="SYS", default=None,
+                     help="report the corner cross-snapshot std at N and 2N snapshots for the "
+                          "given systems and exit (time-drift companion to --corner-audit); "
+                          "defaults to the three point mutants + WT.")
+    _ap.add_argument("--version", type=int, default=1, metavar="N",
+                     help="figure version suffix _v<N> (default 1). Bump when the run "
+                          "grew >50%% or completed; otherwise leave it so the existing "
+                          "figure is overwritten in place.")
+    _ap.add_argument("--t-max", type=float, default=None, metavar="NS",
+                     help="time-matched comparison: cut every system's colvars and hills "
+                          "at t <= NS per walker first (outputs tagged _t<NS>ns, the "
+                          "full-length tables/figures are left untouched); e.g. to compare "
+                          "a still-running 1IDR_wall with the finished runs")
     _args = _ap.parse_args()
-    if _args.idrdna_bend_2d is not None:
+    if _args.t_max is not None:
+        _args.systems = register_truncated(_args.t_max, _args.systems)
+    FIG_VERSION = _args.version
+    if _args.corner_audit is not None:
+        targets = _args.corner_audit or ["1Nhp6A_wall", "1S26D_wall", "1T63D_wall", "1TM_wall"]
+        for _nm in targets:
+            for _tc in _args.t_cut:
+                corner_audit(_nm, t_cut_ns=_tc)
+        print("\ndone (corner-audit)")
+    elif _args.corner_snap_doubling is not None:
+        targets = (_args.corner_snap_doubling
+                   or ["1Nhp6A_wall", "1S26D_wall", "1T63D_wall", "1TM_wall"])
+        for _nm in targets:
+            corner_snap_doubling(_nm)
+        print("\ndone (corner-snap-doubling)")
+    elif _args.idrdna_bend_2d is not None:
         targets = _args.idrdna_bend_2d or ["1Nhp6A_wall", "1S26D_wall", "1T63D_wall", "1TM_wall"]
         for _nm in targets:
             write_idrdna_bend_2d(_nm)
         print("done (idrdna-bend-2d)")
+    elif _args.de2e_bend_2d is not None:
+        for _nm in (_args.de2e_bend_2d or [DNA_KEY]):
+            write_idrdna_bend_2d(_nm, xcv="de2e")
+        print("done (de2e-bend-2d)")
     elif _args.plot_only:
         overlay_figures(load_snap_from_dat(_args.systems))
         print("done (plot-only)")

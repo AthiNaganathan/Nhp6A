@@ -29,14 +29,17 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from figpaths import figpath  # noqa: E402
+
 CUTOFF = 1.2        # nm -- conservative margin over the 0.9 nm nonbonded cut-off (rvdw/rcoulomb);
                     # the project treats >=~1.29 nm as clean (see the mindist -pi interpretation note)
 SUSTAINED_NS = 1.0  # a dip below the cut-off lasting longer than this is worth a look
-FIGDIR = "figures"
 PBCDIR = "analysis/pbc"
 GLOB = "mindist_pi_r[0-9].xvg"   # canonical per-replica pass only; see --glob for fine re-scans
 DEF_TITLE = "1Nhp6A apo (large box): solute-to-periodic-image distance"
-DEF_OUT = "figures/1Nhp6A_apo_large_mindist_pi_v1"
+DEF_OUT = figpath("1Nhp6A_apo_large_mindist_pi_v1", makedirs=False)   # figures/1Nhp6A_apo/
 
 
 def read_xvg(path):

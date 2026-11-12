@@ -4,10 +4,10 @@
 Produces, for any of the project's MetaD systems (1D or 2D), the standard pair
 of convergence figures:
 
-  figures/<label>_fes_convergence_v<N>.png
+  figures/<system>/<label>_fes_convergence_v<N>.png   (folder: figpaths.py)
       the 1D marginal PMF of each BIASED CV drawn at a series of increasing
       cumulative-time snapshots, lines coloured by time with a colourbar.
-  figures/<label>_mad_convergence_v<N>.png
+  figures/<system>/<label>_mad_convergence_v<N>.png
       mean absolute deviation between CONSECUTIVE snapshot marginals vs time,
       semilogy, with a dashed 0.5*kBT reference line.
 
@@ -16,8 +16,8 @@ and archives the numbers so they can be re-plotted without recomputation:
   analysis/<label>_fes_convergence[_<cv>].dat   CV grid + one column per snapshot
   analysis/<label>_mad_convergence.dat          time + one MAD column per CV
 
-Method (identical to the per-system notebooks, e.g. analysis_1TM_2D.ipynb
-cells 22-23, and to analysis_1Nhp6A_apo_large_2D.ipynb cell 22):
+Method (identical to the per-system notebooks, e.g. notebooks/analysis_1TM_2D.ipynb
+cells 23-24, and to notebooks/analysis_1Nhp6A_apo_large_2D.ipynb cell 23):
 
   1. Merge the walker HILLS time-sorted (metad_convergence.merge_hills) and get
      cumulative FES snapshots in ONE `plumed sum_hills --stride` pass
@@ -77,6 +77,7 @@ import matplotlib.pyplot as plt
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from metad_convergence import find_hills, merge_hills, run_sum_hills  # noqa: E402
 from fes_marginal_meanstd import load_fes, marginal_fes               # noqa: E402
+from figpaths import figout                                            # noqa: E402
 
 # PLUMED's default kt used by sum_hills when --kt is not given (kB * 300 K).
 KBT_PLUMED_DEFAULT = 2.494339  # kJ/mol
@@ -151,7 +152,8 @@ def main():
     ap.add_argument("--kbt", type=float, default=KBT_PLUMED_DEFAULT,
                     help="kBT (kJ/mol) for the Boltzmann marginal and the "
                          "0.5 kBT line; default = PLUMED sum_hills default")
-    ap.add_argument("--figdir", default="figures")
+    ap.add_argument("--figdir", default=None,
+                    help="default: routed into figures/<system>/ by figpaths.py")
     ap.add_argument("--datadir", default="analysis")
     ap.add_argument("--version", type=int, default=1, help="figure _v<N> suffix")
     ap.add_argument("--workdir", default=None,
@@ -271,7 +273,6 @@ def main():
     print(f"saved {out}")
 
     # ---- figure 1: time-coloured marginal overlay ----
-    os.makedirs(args.figdir, exist_ok=True)
     cmap_t = matplotlib.colormaps["plasma"]
     norm_t = matplotlib.colors.Normalize(vmin=0, vmax=snap_t_ns[-1])
     n = len(cvnames)
@@ -289,8 +290,7 @@ def main():
         ax.set_title(f"{args.label}: {c} marginal PMF vs time")
         ax.set_ylim(bottom=0)
     fig.tight_layout()
-    fig1 = os.path.join(args.figdir,
-                        f"{args.label}_fes_convergence_v{args.version}.png")
+    fig1 = figout(f"{args.label}_fes_convergence_v{args.version}.png", args.figdir)
     fig.savefig(fig1, dpi=300, facecolor="white", transparent=False,
                 bbox_inches="tight")
     plt.close(fig)
@@ -309,8 +309,7 @@ def main():
         ax.set_title(f"{args.label}: {c} marginal PMF")
         ax.legend(fontsize=8)
     fig.tight_layout()
-    fig2 = os.path.join(args.figdir,
-                        f"{args.label}_mad_convergence_v{args.version}.png")
+    fig2 = figout(f"{args.label}_mad_convergence_v{args.version}.png", args.figdir)
     fig.savefig(fig2, dpi=300, facecolor="white", transparent=False,
                 bbox_inches="tight")
     plt.close(fig)

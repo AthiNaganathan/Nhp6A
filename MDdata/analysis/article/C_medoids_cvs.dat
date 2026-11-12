@@ -1,0 +1,4 @@
+# medoid (min mean heavy-atom RMSD per state). frame_in_xtc = row order below (0-based)
+# state replica time_ps total_helicity q_core n_tail_core rmsd_core helix1 helix2 helix3
+  1  0    236200.00   39.4067   0.9998  25.4859   0.1073   8.7098   8.9875  21.7094
+  2  4    489400.00   32.5592   0.8590  19.6053   0.3566   7.1743   3.3087  22.0762

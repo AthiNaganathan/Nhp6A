@@ -1,0 +1,4 @@
+# medoid (min mean heavy-atom RMSD per state). frame_in_xtc = row order below (0-based)
+# state replica time_ps n_IDR-DNA bend de2e theta cmap
+  1  2    259880.00   12.0544   7.4031   4.9796   3.0124   0.8750
+  2  5    148280.00   25.6288   7.7913   4.6012   3.0056   0.9690

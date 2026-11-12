@@ -36,6 +36,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from scipy import ndimage
 
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "analysis", "scripts"))
+from figpaths import figpath  # noqa: E402
+
 # -- constants ---------------------------------------------------------------
 kBT          = 2.494339      # kJ/mol at 300 K (consistent with prior analysis)
 NWALKERS     = 6
@@ -56,8 +60,10 @@ BARRIER      = 0.0           # kJ/mol: min saddle barrier to keep basins distinc
 RNG_SEED     = 42
 ANALYSIS_DIR = "analysis"
 DATA_DIR     = "data"
-FIG_DIR      = "figures"     # project convention: figures live in the root figures/
 SNAP_DIR     = os.path.join(ANALYSIS_DIR, "snapshots")
+FIG_VERSION  = 1             # figure filename suffix _v<N>; set from --fig-version.
+                             # Bump only when the underlying run grew (project convention);
+                             # default 1 keeps every previously written filename unchanged.
 
 # -- system definitions ------------------------------------------------------
 SYSTEMS = {
@@ -89,23 +95,9 @@ SYSTEMS = {
         "xtc":    f"{DATA_DIR}/1Nhp6A_wall/replica_{{i}}/1Nhp6A_DNA_parambsc1_tip3p_ions0.15_cmap_meta_2D_r{{i}}_proc.xtc",
         "top":    f"{DATA_DIR}/1Nhp6A/1Nhp6A_protdna.gro",
     },
-    # holo 1Nhp6A:DNA on the Figure-5 Panel E projection F(n_IDR-DNA, bend).
-    # This is the REWEIGHTED (final-bias) 2D PMF written by figure5_data.py, NOT a
-    # sum_hills surface: coord_tail_dna is biased but the bend angle is a spectator,
-    # so the medoid must come off the reweighted grid. Same walkers/xtc/topology as
-    # 1Nhp6A_wall. cv2 = bend = 180 - degrees(theta), applied via cv_transform
-    # (theta is stored in radians in the colvar, col 3).
-    "1Nhp6A_wall_bend": {
-        "fes":    f"{ANALYSIS_DIR}/figure5/E_pmf2d_idrdna_bend.dat",
-        "colvar": f"{DATA_DIR}/1Nhp6A_wall/replica_{{i}}/colvar_r{{i}}.dat",
-        "xtc":    f"{DATA_DIR}/1Nhp6A_wall/replica_{{i}}/1Nhp6A_DNA_parambsc1_tip3p_ions0.15_cmap_meta_2D_r{{i}}_proc.xtc",
-        "top":    f"{DATA_DIR}/1Nhp6A/1Nhp6A_protdna.gro",
-        "dt_traj":  20.0,
-        "cv_cols":  (1, 3),                    # coord_tail_dna, theta(rad)
-        "cv_names": ("n_IDR-DNA", "bend (deg)"),
-        "cv_transform": (None, lambda th: 180.0 - np.degrees(th)),
-        "extra_cols": {"de2e": 2, "theta": 3, "cmap": 4},
-    },
+    # NOTE: the four holo `<SYS>_wall_bend` entries (WT + the three phosphomimetic
+    # mutants) are generated below by _holo_bend_cfg -- they differ only in system
+    # name, so a literal block each would be four near-duplicates.
     # apo protein (no DNA): CVs are folding/helicity descriptors, 100 ps frames.
     "1Nhp6A_apo_large": {
         "fes":    f"{ANALYSIS_DIR}/1Nhp6A_apo_large_fes_sumhills.dat",
@@ -126,7 +118,7 @@ SYSTEMS = {
     # cv1 = total_helicity = helix1+helix2+helix3 (summed colvar cols 4,5,6);
     # cv2 = q_core (col 1).  Same proc.xtc/topology as 1Nhp6A_apo_large.
     "1Nhp6A_apo_large_helicity": {
-        # Panel C's PLOTTED surface (figure5_data.py --export-seg-fes): coarser and
+        # Panel C's PLOTTED surface (article_data.py --export-seg-fes): coarser and
         # snapshot-averaged, i.e. the same estimator the figure shows. Segmenting on the finer
         # single-shot FES (1Nhp6A_apo_large_fes_helicity_qcore.dat) splits the shallow second well
         # into sub-minima separated by less than its own +/-4-6 kJ/mol uncertainty, and the medoid
@@ -134,15 +126,24 @@ SYSTEMS = {
         "fes":    f"{ANALYSIS_DIR}/1Nhp6A_apo_large_fes_helicity_qcore_panelC.dat",
         "colvar": f"{DATA_DIR}/1Nhp6A_apo_large/replica_{{i}}/colvar_r{{i}}.dat",
         # protein-only, whole-molecule trajectories built from the .trr by pbc_mindist_check.sh
-        # (200 ps stride, full run). The old 100 ps proc.xtc only covered the 500 ns run and
-        # rebuilding it meant streaming 102 GB of raw xtc per walker (~7 h); the trr carries the
-        # same coordinates 30x cheaper. 200 ps still leaves ~4,000 candidate frames per walker.
-        # `_proc.xtc` here is the solute-only, whole-molecule copy in each replica directory:
-        # 0-1000 ns at 200 ps, 5001 frames, 1539 atoms.
-        "xtc":    (f"{DATA_DIR}/1Nhp6A_apo_large/replica_{{i}}/"
-                   f"1Nhp6A_parambsc1_tip3p_ions0.15_meta_2D_r{{i}}_proc.xtc"),
+        # (200 ps stride, full run). The trr carries the same coordinates as the 102 GB raw xtc
+        # ~30x cheaper.
+        #
+        # 2026-08-07: repointed from the replica-dir `_proc.xtc` to analysis/pbc/solute_r*.xtc.
+        # The `_proc.xtc` copies were written 07-31, BEFORE job 3822 finished, so they stop at
+        # 1000 ns (5001 frames) while the panel-C surface is built on the full 1250 ns colvar --
+        # the markers were representatives of the first 900 ns of a 1250 ns surface. The
+        # solute_r*.xtc were rebuilt 08-06 after the run completed and cover 0-1250 ns
+        # (6251 frames, 200 ps, 1539 atoms); they are bit-identical to `_proc.xtc` over the
+        # 0-1000 ns overlap (max |dx| = 0.0 nm, times match), so this only ADDS the last 250 ns.
+        # They are also the exact files reweight_qbh.compute_q uses for the 1250 ns Q_BH cache.
+        "xtc":    f"{ANALYSIS_DIR}/pbc/solute_r{{i}}.xtc",
         "top":    f"{DATA_DIR}/1Nhp6A_apo_large/1Nhp6A_parambsc1_tip3p_ed.gro",
         "dt_traj":  200.0,
+        # medoid over the FOLDED CORE only (res 21-93 = CORE_LO/CORE_HI in reweight_qbh.py,
+        # 596 heavy atoms). The disordered IDR otherwise decides the medoid outright -- see
+        # the note at the medoid block in process_system().
+        "medoid_sel": "not element H and resSeq 21 to 93",
         "cv_cols":  ((4, 5, 6), 1),            # cv1=total_helicity(sum), cv2=q_core
         "cv_names": ("total_helicity", "q_core"),
         "extra_cols": {"n_tail_core": 2, "rmsd_core": 3,
@@ -150,17 +151,133 @@ SYSTEMS = {
         # trim to the populated region: helicity>=10, 0.5<=q_core<=1.0
         "zoom":     ((10.0, 44.0), (0.5, 1.0)),
     },
+    # apo protein, helicity projection segmented on the CANONICAL Best-Hummer Q
+    # instead of the biasing q_core, so the panel-C markers are Q_BH-derived end to
+    # end (state membership AND coordinates) rather than inheriting q_core basins.
+    # Both inputs come from reweight_qbh.py --emit-seg-inputs:
+    #   fes    : the panel-C Q_BH surface with axes swapped to (total_helicity, Q_BH),
+    #            built from the 2 ps `plumed driver` pass (1.8 M frames, 0-1000 ns).
+    #   colvar : colvar-SHAPED tables whose col 1 is Q_BH where the real colvar has
+    #            q_core, so the layout below is identical to its q_core twin; q_core
+    #            rides along as col 7 and is reported in the medoid table.
+    # 2026-08-07: everything here is now 0-1250 ns, matching the q_core twin. The
+    # 2 ps driver pass was re-run over the completed run (analysis/qbh_1250 on
+    # insulin -> local analysis/qbh), so the surface and the qbh_seg colvars both
+    # reach 1250 ns, and the structural pool is the same 6251-frame solute_r*.xtc.
+    # Before that the surface stopped at 1000 ns (the driver read while 3822 was
+    # still extending) -- do NOT mix a 1250 ns pool with a 1000 ns surface.
+    "1Nhp6A_apo_large_helicity_qbh": {
+        "fes":    f"{ANALYSIS_DIR}/1Nhp6A_apo_large_fes_helicity_qbh_panelC.dat",
+        "colvar": f"{ANALYSIS_DIR}/qbh_seg/colvar_qbh_r{{i}}.dat",
+        "xtc":    f"{ANALYSIS_DIR}/pbc/solute_r{{i}}.xtc",
+        "top":    f"{DATA_DIR}/1Nhp6A_apo_large/1Nhp6A_parambsc1_tip3p_ed.gro",
+        "dt_traj":  200.0,
+        # medoid over the folded core only -- same reason as the q_core twin
+        "medoid_sel": "not element H and resSeq 21 to 93",
+        "cv_cols":  ((4, 5, 6), 1),            # cv1=total_helicity(sum), cv2=q_bh
+        "cv_names": ("total_helicity", "q_bh"),
+        "extra_cols": {"n_tail_core": 2, "rmsd_core": 3,
+                       "helix1": 4, "helix2": 5, "helix3": 6, "q_core": 7},
+        # the Q_BH surface only spans Q=0.782-0.998; helicity as for the q_core twin
+        "zoom":     ((10.0, 44.0), (0.78, 1.0)),
+    },
+}
+
+
+# -- holo (DNA-bound) systems on the F(n_IDR-DNA, bend) projection ------------
+# WT and the three phosphomimetic mutants, all on the SAME reweighted surface
+# family `analysis/<SYS>_wall_pmf2d_idrdna_bend.dat`, so their representative
+# structures are directly comparable. coord_tail_dna is biased but the bending
+# angle is a spectator, so the medoid must come off the REWEIGHTED grid, never a
+# sum_hills one. cv2 = bend = 180 - degrees(theta) (theta is radians in col 3).
+#
+# The colvar layout is identical for all four (time, coord_tail_dna, de2e, theta,
+# cmap), so only the file naming and the trajectory stride differ:
+#   WT      proc.xtc @  20 ps (15001 frames), topology = the 1Nhp6A .gro
+#   mutants proc.xtc @ 200 ps ( ~1501 frames), topology = each system's own
+#           <SYS>_proc_ref.pdb (atom counts differ: 2490/2487/2489)
+# Every one of these trajectories covers 0-300 ns only, so candidates cap there
+# even where the surface now runs to 350 ns.
+_HOLO_BEND = {
+    #  system   xtc infix          topology                       dt_traj
+    "1Nhp6A": ("1Nhp6A", "",       f"{DATA_DIR}/1Nhp6A/1Nhp6A_protdna.gro",   20.0),
+    "1S26D":  ("1S26D", "_wall",   f"{DATA_DIR}/1S26D_wall/1S26D_proc_ref.pdb", 200.0),
+    "1T63D":  ("1T63D", "_wall",   f"{DATA_DIR}/1T63D_wall/1T63D_proc_ref.pdb", 200.0),
+    "1TM":    ("1TM",   "_wall",   f"{DATA_DIR}/1TM_wall/1TM_proc_ref.pdb",     200.0),
+    # revision: IDR-only peptide (res 1-23) + DNA; proc.xtc = peptide+DNA, 1365 atoms
+    "1IDR":   ("1IDR",  "_wall",   f"{DATA_DIR}/1IDR_wall/1IDR_DNA_parambsc1_tip3p.pdb", 20.0),
+    # revision: Δ2-10 + DNA (solute, 2324 atoms). Canonical _proc.xtc (20 ps, 0-350 ns,
+    # -pbc cluster on the solute group), written 2026-11-05 after job 3918.
+    "1D2_10": ("1D2_10", "_wall",  f"{DATA_DIR}/1D2_10/1D2_10_DNA_parambsc1_tip3p.gro", 20.0),
+}
+
+
+def _holo_bend_cfg(sys_name, prefix, infix, top, dt_traj):
+    return {
+        "fes":    f"{ANALYSIS_DIR}/{sys_name}_wall_pmf2d_idrdna_bend.dat",
+        "colvar": f"{DATA_DIR}/{sys_name}_wall/replica_{{i}}/colvar_r{{i}}.dat",
+        "xtc":    (f"{DATA_DIR}/{sys_name}_wall/replica_{{i}}/{prefix}"
+                   f"_DNA_parambsc1_tip3p_ions0.15_cmap_meta_2D{infix}_r{{i}}_proc.xtc"),
+        "top":    top,
+        "dt_traj":  dt_traj,
+        "cv_cols":  (1, 3),                    # coord_tail_dna, theta(rad)
+        "cv_names": ("n_IDR-DNA", "bend (deg)"),
+        "cv_transform": (None, lambda th: 180.0 - np.degrees(th)),
+        "extra_cols": {"de2e": 2, "theta": 3, "cmap": 4},
+        # cols of the reweighted grid: 0 cv1, 1 cv2, 2 F_mean, 3 F_std,
+        # 4 frame_counts, 5 n_walkers
+        "mask": {"std_col": 3, "std_max": 5.0,
+                 "nwalk_col": 5, "min_walkers": 3},
+    }
+
+
+for _s, (_p, _in, _top, _dt) in _HOLO_BEND.items():
+    SYSTEMS[f"{_s}_wall_bend"] = _holo_bend_cfg(_s, _p, _in, _top, _dt)
+
+# 1IDR: the peptide is disordered and ~1/4 of the heavy atoms, so an all-heavy-atom medoid is
+# decided by the DNA. Superpose on the DNA, then rank by the peptide's RMSD WITHOUT refitting:
+# the medoid is the most typical IDR placement on the DNA, not the most typical DNA.
+SYSTEMS["1IDR_wall_bend"].update(medoid_fit="chainid 1 2 and not element H",
+                                 medoid_sel="chainid 0 and not element H")
+
+# Free DNA (corrected dna_end2 run): 1D MetaD on de2e only, so the surface is the
+# REWEIGHTED F(de2e, bend) (dna_bending_wall_compare.py --de2e-bend-2d); bend is a
+# spectator. Colvar = time, de2e, theta, cmap. proc.xtc = DNA duplex only (950 atoms,
+# -pbc cluster so both strands stay together), 20 ps, 0-100 ns.
+SYSTEMS["DNA_wall2_de2e_bend"] = {
+    "fes":    f"{ANALYSIS_DIR}/DNA_wall2_pmf2d_de2e_bend.dat",
+    "colvar": f"{DATA_DIR}/DNA_wall2/replica_{{i}}/colvar_r{{i}}.dat",
+    "xtc":    (f"{DATA_DIR}/DNA_wall2/replica_{{i}}/DNA_parambsc1_tip3p_ions0.15"
+               f"_cmap_meta_e2e_wall_r{{i}}_proc.xtc"),
+    "top":    f"{DATA_DIR}/DNA_wall2/DNA_wall2_proc_ref.pdb",
+    "dt_traj":  20.0,
+    "cv_cols":  (1, 2),                    # de2e, theta(rad)
+    "cv_names": ("de2e (nm)", "bend (deg)"),
+    "cv_transform": (None, lambda th: 180.0 - np.degrees(th)),
+    "extra_cols": {"de2e": 1, "theta": 2, "cmap": 3},
+    "mask": {"std_col": 3, "std_max": 5.0, "nwalk_col": 5, "min_walkers": 3},
 }
 
 
 # -- FES loading (orientation-proof) -----------------------------------------
-def load_fes_grid(path):
-    """Load a PLUMED sum_hills 2D FES into a regular grid.
+def load_fes_grid(path, mask=None):
+    """Load a 2D free-energy grid into a regular array.
 
-    Columns: cv1 (coord_tail_dna), cv2 (de2e), F, dF/dcv1, dF/dcv2.
-    Returns (cv1_vals, cv2_vals, F) where F has shape (n_cv2, n_cv1) and
-    F[j, i] = FES(cv1_vals[i], cv2_vals[j]).  Cells are placed by value lookup,
-    so the result is independent of the file's row ordering.
+    Columns: cv1, cv2, F, then either the sum_hills derivatives (dF/dcv1,
+    dF/dcv2) or, for a reweighted mean+/-std surface, F_std, frame_counts and
+    optionally n_walkers.  Returns (cv1_vals, cv2_vals, F) where F has shape
+    (n_cv2, n_cv1) and F[j, i] = FES(cv1_vals[i], cv2_vals[j]).  Cells are
+    placed by value lookup, so the result is independent of row ordering.
+
+    `mask` (per-system, from the SYSTEMS entry) blanks unreliable cells to NaN
+    BEFORE segmentation, so they can neither seed a basin nor accept members:
+      std_col/std_max     : drop cells whose cross-snapshot std exceeds std_max
+                            (project convention: 5 kJ/mol)
+      nwalk_col/min_walkers: drop cells visited by fewer than min_walkers
+                            walkers -- the ergodicity mask that exposed S26D's
+                            low-bend/high-contact corner as a walker artifact.
+    Column indices are taken from the config rather than sniffed, because a
+    sum_hills file and a reweighted file can both be 5 columns wide.
     """
     d = np.loadtxt(path, comments="#")
     cv1_vals = np.unique(d[:, 0])
@@ -169,6 +286,19 @@ def load_fes_grid(path):
     i1 = np.searchsorted(cv1_vals, d[:, 0])
     i2 = np.searchsorted(cv2_vals, d[:, 1])
     F[i2, i1] = d[:, 2]
+    if mask:
+        keep = np.ones(len(d), dtype=bool)
+        if mask.get("std_col") is not None and mask.get("std_max") is not None:
+            std = d[:, mask["std_col"]]
+            keep &= np.isfinite(std) & (std <= mask["std_max"])
+        if mask.get("nwalk_col") is not None and mask.get("min_walkers"):
+            keep &= d[:, mask["nwalk_col"]] >= mask["min_walkers"]
+        drop = ~keep
+        n_before = int(np.isfinite(F).sum())
+        F[i2[drop], i1[drop]] = np.nan
+        n_after = int(np.isfinite(F).sum())
+        print(f"  Reliability mask: {n_before} -> {n_after} cells "
+              f"(std<={mask.get('std_max')}, n_walkers>={mask.get('min_walkers')})")
     return cv1_vals, cv2_vals, F
 
 
@@ -282,7 +412,8 @@ def _merge_shallow(labels, Ffill, fmin, barrier):
     return {raw: find(raw) for raw in fmin}
 
 
-def segment_basins(cv1_vals, cv2_vals, F, f_ceil=F_CEIL, delta_f=DELTA_F, barrier=BARRIER):
+def segment_basins(cv1_vals, cv2_vals, F, f_ceil=F_CEIL, delta_f=DELTA_F,
+                   barrier=BARRIER, min_cells=1):
     """Partition the FES into metastable basins and merge spurious sub-basins.
 
     1. Watershed (steepest-descent) partition into basins of attraction — a true
@@ -291,6 +422,13 @@ def segment_basins(cv1_vals, cv2_vals, F, f_ceil=F_CEIL, delta_f=DELTA_F, barrie
     2. Prominence merge: basins separated from a deeper neighbour by a saddle
        barrier < `barrier` are folded in, so flat valley-floor ripples do not
        masquerade as distinct states.
+
+    3. Drop basins whose energy-tight core is smaller than `min_cells`. On a
+       reliability/ergodicity-masked surface the prominence merge cannot fold a
+       fragment into its neighbour when the two are separated by NaN rather than
+       by a saddle, so a handful of cells stranded against the mask edge would
+       otherwise be reported as a state. Such a fragment carries no basin volume
+       and its medoid would be meaningless.
 
     Only minima below f_ceil seed basins. `ncells` reports the energy-tight core
     {label == k AND F < F_min + delta_f}, used downstream for membership.
@@ -330,6 +468,24 @@ def segment_basins(cv1_vals, cv2_vals, F, f_ceil=F_CEIL, delta_f=DELTA_F, barrie
             "cv1": float(cv1_vals[i]), "cv2": float(cv2_vals[j]),
             "fmin": fmin, "ncells": int(core.sum()),
         })
+
+    # drop mask-edge fragments, then renumber the survivors by depth so the ids
+    # stay contiguous (state_1 = deepest)
+    dropped = [b for b in basins if b["ncells"] < min_cells]
+    if dropped:
+        for b in dropped:
+            print(f"    dropped fragment id {b['id']} "
+                  f"({cv1_vals[b['i1']]:.2f}, {cv2_vals[b['i2']]:.2f}): "
+                  f"core {b['ncells']} < --min-cells {min_cells}")
+        keep = [b for b in basins if b["ncells"] >= min_cells]
+        renum = {b["id"]: k + 1 for k, b in enumerate(keep)}
+        new_labels = np.zeros(F.shape, dtype=int)
+        for old, new in renum.items():
+            new_labels[labels == old] = new
+        labels = new_labels
+        for b in keep:
+            b["id"] = renum[b["id"]]
+        basins = keep
     return labels, basins
 
 
@@ -464,10 +620,17 @@ def process_system(name, cfg, args, rng):
     meta_keys = ["replica", "time", "cv1", "cv2"] + list(extra)
     cv1_name = cv_names[0].split()[0]
     cv2_name = cv_names[1].split()[0]
-    cv1_vals, cv2_vals, F = load_fes_grid(cfg["fes"])
+    mask = cfg.get("mask")
+    if mask and (args.std_max is not None or args.min_walkers is not None):
+        mask = dict(mask)                      # CLI override, for sensitivity checks
+        if args.std_max is not None:
+            mask["std_max"] = args.std_max
+        if args.min_walkers is not None:
+            mask["min_walkers"] = args.min_walkers
+    cv1_vals, cv2_vals, F = load_fes_grid(cfg["fes"], mask=mask)
     labels, basins = segment_basins(cv1_vals, cv2_vals, F,
                                     f_ceil=args.f_ceil, delta_f=args.delta_f,
-                                    barrier=args.barrier)
+                                    barrier=args.barrier, min_cells=args.min_cells)
     print(f"  FES grid: {len(cv1_vals)} x {len(cv2_vals)} "
           f"({cv1_name} {cv1_vals[0]:.2f}-{cv1_vals[-1]:.2f}, "
           f"{cv2_name} {cv2_vals[0]:.2f}-{cv2_vals[-1]:.2f})")
@@ -543,17 +706,63 @@ def process_system(name, cfg, args, rng):
         traj.save_xtc(out)
         print(f"    wrote {len(frames)} frames -> {out}")
 
-        # structural medoid = frame minimising mean heavy-atom RMSD to the rest
-        heavy = traj.topology.select("not element H")
+        # structural medoid = frame minimising mean RMSD to the rest, over
+        # `medoid_sel` (default: all heavy atoms).
+        #
+        # 2026-08-07: the apo systems MUST restrict this to the folded core. With all
+        # 761 protein heavy atoms the criterion is decided by the disordered IDR --
+        # mean RMSD 5.8-11.3 A against 2.2-3.0 A over the core -- so the winner beat
+        # the runner-up by 0.06 A out of 5.83 A and the marker landed at q_core 0.9674
+        # while the basin minimum sits at 0.998. On core heavy atoms the ranking
+        # inverts and the medoid returns to q_core 0.9990, on the minimum.
+        heavy = traj.topology.select(cfg.get("medoid_sel", "not element H"))
         if len(heavy) == 0:
             heavy = np.arange(traj.n_atoms)
+        print(f"    medoid RMSD over {len(heavy)} atoms "
+              f"({cfg.get('medoid_sel', 'not element H')})")
+        fit_sel = cfg.get("medoid_fit")
+        if fit_sel:
+            fit = traj.topology.select(fit_sel)
+            print(f"    superposed on {len(fit)} atoms ({fit_sel}); RMSD not refitted")
         if traj.n_frames == 1:
             mi = 0
         else:
             sums = np.zeros(traj.n_frames)
             for i in range(traj.n_frames):
-                sums += md.rmsd(traj, traj, i, atom_indices=heavy)
+                if fit_sel:
+                    # copy: the saved state/medoid coordinates must stay as extracted
+                    al = traj[:].superpose(traj, i, atom_indices=fit)
+                    d = al.xyz[:, heavy] - traj.xyz[i, heavy]
+                    sums += np.sqrt((d ** 2).sum(axis=2).mean(axis=1))
+                else:
+                    sums += md.rmsd(traj, traj, i, atom_indices=heavy)
             mi = int(np.argmin(sums))
+            # The argmin is never decisive -- with 200 frames the best and second-best
+            # mean RMSD differ by ~0.01 A against a ~1 A spread, so "the medoid" is one
+            # arbitrary draw from a set of structurally equivalent frames. With
+            # --medoid-cv-tiebreak, take that set explicitly (the best
+            # `--medoid-tol-pct` percent of the ranking) and among its members keep the
+            # one closest to the region's own free-energy minimum, measured in grid
+            # cells so the two CVs are commensurate. This changes only WHICH of several
+            # equivalent structures is shown -- it does not relax the RMSD criterion --
+            # and it stops the marker being drawn on the flank of the feature it labels.
+            if args.medoid_cv_tiebreak:
+                k = max(1, int(np.ceil(args.medoid_tol_pct / 100.0 * traj.n_frames)))
+                near = np.argsort(sums)[:k]
+                d1 = np.median(np.diff(cv1_vals)) or 1.0
+                d2 = np.median(np.diff(cv2_vals)) or 1.0
+                dist = np.hypot([(fmeta[i]["cv1"] - b["cv1"]) / d1 for i in near],
+                                [(fmeta[i]["cv2"] - b["cv2"]) / d2 for i in near])
+                mi_cv = int(near[int(np.argmin(dist))])
+                rm = sums / (traj.n_frames - 1)
+                print(f"    CV tiebreak: {k} frames within the top {args.medoid_tol_pct:g}% "
+                      f"of the RMSD ranking ({rm[near].min()*10:.2f}-{rm[near].max()*10:.2f} A); "
+                      f"kept the one nearest ({cv1_name} {b['cv1']:.2f}, {cv2_name} {b['cv2']:.3f})")
+                print(f"      pure medoid : {cv1_name} {fmeta[mi]['cv1']:7.3f}  "
+                      f"{cv2_name} {fmeta[mi]['cv2']:7.4f}  meanRMSD {rm[mi]*10:.2f} A")
+                print(f"      CV-nearest  : {cv1_name} {fmeta[mi_cv]['cv1']:7.3f}  "
+                      f"{cv2_name} {fmeta[mi_cv]['cv2']:7.4f}  meanRMSD {rm[mi_cv]*10:.2f} A")
+                mi = mi_cv
         medoid_frames.append(traj[mi])
         medoid_meta.append({"state": b["id"], **fmeta[mi]})
 
@@ -616,7 +825,6 @@ def process_system(name, cfg, args, rng):
 # -- plotting ----------------------------------------------------------------
 def plot_overlay(name, cv1_vals, cv2_vals, F, labels, basins, picks, suffix,
                  medoids=None, delta_f=DELTA_F, cv_names=DEFAULT_CV_NAMES, zoom=None):
-    os.makedirs(FIG_DIR, exist_ok=True)
     fig, ax = plt.subplots(figsize=(6.5, 4.5))
     Fm = np.ma.masked_invalid(F)
     levels = np.linspace(0, np.nanmin([F[np.isfinite(F)].max(), 40]), 21)
@@ -653,7 +861,7 @@ def plot_overlay(name, cv1_vals, cv2_vals, F, labels, basins, picks, suffix,
     ax.set_xlabel(cv_names[0])
     ax.set_ylabel(cv_names[1])
     ax.set_title(f"{name}: FES basins + state medoids")
-    out = os.path.join(FIG_DIR, f"{name}_fes2d_{suffix}_v1.png")
+    out = figpath(f"{name}_fes2d_{suffix}_v{FIG_VERSION}.png")   # figures/<system>/
     fig.tight_layout()
     fig.savefig(out, dpi=300)
     plt.close(fig)
@@ -661,16 +869,46 @@ def plot_overlay(name, cv1_vals, cv2_vals, F, labels, basins, picks, suffix,
 
 
 def main():
+    global FIG_VERSION
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--system", choices=list(SYSTEMS) + ["all"], default="all")
     ap.add_argument("--plot-only", action="store_true",
                     help="segment + plot basins for confirmation; no extraction")
     ap.add_argument("--n-per-state", type=int, default=N_PER_STATE)
+    ap.add_argument("--medoid-cv-tiebreak", action="store_true",
+                    help="among the structurally equivalent frames at the top of the "
+                         "mean-RMSD ranking (see --medoid-tol-pct), keep the one nearest "
+                         "the region's free-energy minimum in grid-cell units, so a "
+                         "marker is not drawn on the flank of the feature it labels. The "
+                         "RMSD criterion itself is unchanged.")
+    ap.add_argument("--medoid-tol-pct", type=float, default=10.0, metavar="PCT",
+                    help="size of that equivalent set, as a %% of the frames in the "
+                         "state (default %(default)s). 10 was chosen on the apo shoulder: "
+                         "at 5%% the set is too narrow to contain a frame near the "
+                         "free-energy minimum and the pick lands on the tail of the helix2 "
+                         "distribution (2nd percentile); at 10%% it sits at the minimum with "
+                         "helix2 at the 24th, for 0.11 A of mean RMSD.")
     ap.add_argument("--f-ceil", type=float, default=F_CEIL)
     ap.add_argument("--delta-f", type=float, default=DELTA_F)
     ap.add_argument("--barrier", type=float, default=BARRIER,
                     help="min saddle barrier (kJ/mol) for a basin to count as distinct")
+    ap.add_argument("--min-cells", type=int, default=1, metavar="N",
+                    help="discard basins whose energy-tight core is smaller than N grid "
+                         "cells (default %(default)s = keep all). On a masked surface, "
+                         "fragments stranded against the mask edge cannot be merged away "
+                         "by --barrier; use e.g. 5 to drop them.")
     ap.add_argument("--t-max-ns", type=float, default=150.0)
+    ap.add_argument("--std-max", type=float, default=None, metavar="KJMOL",
+                    help="override the per-system reliability mask: blank FES cells whose "
+                         "cross-snapshot std exceeds this (default: the system's own value, "
+                         "5 kJ/mol for the reweighted holo surfaces)")
+    ap.add_argument("--min-walkers", type=int, default=None, metavar="N",
+                    help="override the per-system ergodicity mask: blank FES cells visited "
+                         "by fewer than N walkers (default: the system's own value, 3 for "
+                         "the reweighted holo surfaces). 0 disables it.")
+    ap.add_argument("--fig-version", type=int, default=FIG_VERSION, metavar="N",
+                    help="figure filename suffix _v<N> in figures/<system>/ (default %(default)s). "
+                         "Bump when the underlying run grew, so earlier versions survive.")
     ap.add_argument("--shoulder", type=str, default=None, metavar="CV1,CV2,R1,R2",
                     help="Additionally extract a representative from an explicit CV window "
                          "(centre CV1,CV2; half-widths R1,R2). For a feature that is NOT a "
@@ -678,6 +916,7 @@ def main():
                          "the noise floor, which --barrier correctly merges away. Reported as "
                          "SHOULDER, never as a state.")
     args = ap.parse_args()
+    FIG_VERSION = args.fig_version
     if args.shoulder:
         try:
             args.shoulder = tuple(float(v) for v in args.shoulder.split(","))

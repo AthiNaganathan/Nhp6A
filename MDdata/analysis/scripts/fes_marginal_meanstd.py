@@ -6,10 +6,10 @@ Generalises two existing notebook protocols into one parameterised script so
 new systems (e.g. soft-wall variants) don't need a new notebook to feed
 plot_pmf_comparison.py:
 
-  ndim=2 (analysis_1Nhp6A_2D.ipynb / 1T63D / 1S26D / 1TM): hills deposited on
+  ndim=2 (notebooks/analysis_1Nhp6A_2D.ipynb / 1T63D / 1S26D / 1TM): hills deposited on
       (spectator_cv, de2e); Boltzmann-marginalise over the spectator CV within
       --win-cv1 to get the de2e marginal at each snapshot.
-  ndim=1 (analysis_replicas.ipynb, DNA): hills deposited on de2e directly;
+  ndim=1 (notebooks/analysis_replicas.ipynb, DNA): hills deposited on de2e directly;
       sum_hills output IS the marginal.
 
 Two snapshot-selection modes:
@@ -17,7 +17,7 @@ Two snapshot-selection modes:
               (matches the 2D protein-system notebooks).
   converged - find t_conv from the running-mean deposited-hill-height decay,
               then average n_snaps snapshots within [t_conv, T_MAX]
-              (matches analysis_replicas.ipynb). Falls back to 'fixed' over
+              (matches notebooks/analysis_replicas.ipynb). Falls back to 'fixed' over
               the full (non-converged) run if the bias hasn't decayed below
               threshold yet, printing a PRELIMINARY warning.
 

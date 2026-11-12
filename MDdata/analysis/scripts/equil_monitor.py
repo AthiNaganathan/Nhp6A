@@ -26,7 +26,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-GMXRC = os.environ.get("GMXRC", "/opt/gromacs/2024.2-plumed/bin/GMXRC.bash")
+GMXRC = "/opt/gromacs/2024.2-plumed/bin/GMXRC.bash"
 
 # reference coordinate file per system, used as the mdtraj topology
 TOPOL = {
@@ -34,6 +34,7 @@ TOPOL = {
     "1Nhp6A_holo": "data/1Nhp6A/1Nhp6A_DNA_parambsc1_tip3p_ions0.15_npt.gro",
     "DNA": "data/DNA/DNA_parambsc1_tip3p_ions0.15_npt.gro",
     "2Nhp6A": "data/2Nhp6A/2Nhp6A_DNA_parambsc1_tip3p_ions0.15_npt.gro",
+    "1D2_10_holo": "data/1D2_10/1D2_10_DNA_parambsc1_tip3p_ions0.15_npt.gro",
 }
 IDR_RESIDUES = "1 to 22"      # N-terminal basic disordered tail of Nhp6A
 BOX_RESIDUES = "23 to 93"     # folded HMG box
@@ -54,6 +55,38 @@ CORE_RESIDUES = (23, 63)         # box N-terminal to H3; a fitting frame, not a 
 HELICES = {"H1": (27, 42), "H2": (48, 61), "H3": (64, 93)}
 CONTACT_CUTOFF = 0.45            # nm, closest-heavy-atom; project convention (medoid_contacts.py)
 DNA_PREFIXES = ("DA", "DT", "DG", "DC")   # residue-name prefixes (also matches DA5/DG3 termini)
+
+# Revision probe (IDR-only m state, PLAN.md). These follow the PUBLISHED biasing CV
+# coord_tail_dna (IDR = 1-20), not IDR_RESIDUES/BOX_RESIDUES above, which feed existing figures.
+# Core = 27-93 (project H1 start); linker 21-26 (incl. K22) belongs to neither.
+PROBE_IDR = (1, 20)
+PROBE_CORE = (27, 93)
+COORD_R0 = 0.5                   # nm; coord_tail_dna switch: rational, NN=6, MM=12
+
+
+def coordination(t, sel_a, sel_b, r0=COORD_R0):
+    """PLUMED COORDINATION (rational switch, NN=6, MM=12, minimum image) between atom groups.
+
+    Applied to Calpha+Cbeta of residues 1-20 vs P+C1' of all nucleotides, this reproduces
+    coord_tail_dna from the holo equil colvar.dat to r = 0.99999 (max |diff| 0.09, xtc precision).
+    """
+    import mdtraj as md
+
+    pairs = np.array([(a, b) for a in sel_a for b in sel_b])
+    d = md.compute_distances(t, pairs, periodic=True) / r0
+    near1 = np.abs(d - 1.0) < 1e-6                   # 0/0 at d = r0; limit of the switch is 1/2
+    with np.errstate(invalid="ignore", divide="ignore"):
+        s = np.where(near1, 0.5, (1 - d ** 6) / (1 - d ** 12))
+    return s.sum(axis=1)
+
+
+def probe_groups(top, r0=0):
+    """Atom groups of the coord_tail_dna CV family for the protein copy starting at residue index r0."""
+    def ca_cb(lo, hi):
+        return top.select(f"resid {r0 + lo - 1} to {r0 + hi - 1} and (name CA or name CB)")
+    dna = [a.index for a in top.atoms
+           if a.residue.name[:2] in DNA_PREFIXES and a.name in ("P", "C1'")]
+    return {"idr": ca_cb(*PROBE_IDR), "core": ca_cb(*PROBE_CORE), "dna": np.array(dna)}
 
 
 def gmx(args, stdin=None):
@@ -247,7 +280,7 @@ def main():
             # PLUMED writes theta as an ANGLE in radians (pi = straight DNA). Report it in
             # the project-wide bend convention instead -- bend = 180 - deg(theta), so 0 deg
             # = straight -- matching equil_timeseries.py, dna_bending_wall_compare.py and
-            # Figure 5. Converting here covers both the printed block means and the panel.
+            # the article panels. Converting here covers both the printed block means and the panel.
             if n == "theta":
                 n, y = "bend (deg)", 180.0 - np.degrees(y)
             bs = " ".join(f"{b:6.2f}" for b in block_means(tc, y))
@@ -295,9 +328,8 @@ def main():
         ax.axis("off")
     fig.suptitle(f"{tag} — unbiased equilibrium MD ({t.time[-1]:.0f} ns)")
     fig.tight_layout()
-    figdir = os.path.join(ROOT, "figures")
-    os.makedirs(figdir, exist_ok=True)
-    out = os.path.join(figdir, f"{args.system}_equil_rep{args.rep}_{args.version}.png")
+    from figpaths import figpath
+    out = figpath(f"{args.system}_equil_rep{args.rep}_{args.version}.png", root=ROOT)
     fig.savefig(out, dpi=300)
     print(f"\nwrote {out}")
 

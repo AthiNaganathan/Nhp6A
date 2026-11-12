@@ -1,0 +1,402 @@
+{
+  "generated": "2026-11-06 19:38",
+  "host": "rubisco",
+  "stride": 1,
+  "n_snaps": 5,
+  "dna_source": "data/DNA_wall2",
+  "A": {
+    "data": "data/1Nhp6A_apo_large",
+    "walkers": 6,
+    "ns_per_walker": 1250.0,
+    "method": "c(t)-reweighted 2D PMF (both CVs biased)",
+    "n_snaps": 5,
+    "minimum": {
+      "q_core": 0.998,
+      "n_idr_core": 8.2
+    },
+    "preliminary": false
+  },
+  "reweighting_apo": {
+    "estimator": "c(t) Tiwary-Parrinello (REWEIGHT_METAD + CALC_RCT)",
+    "gamma": 10.0,
+    "teq_ns": 5.0,
+    "ess": 1267178.6250485533,
+    "ess_percent": 3.39,
+    "gate_mad_qcore_bulk": 2.4,
+    "gate_mad_nidr": 2.43,
+    "gate_mad_qcore_wall": 3.96,
+    "gate_pass": true
+  },
+  "B": {
+    "data": "data/1Nhp6A_apo_large",
+    "method": "c(t)-reweighted profile",
+    "folded_reference": {
+      "helix1": 8.932580997268312,
+      "helix2": 8.738482623274109,
+      "helix3": 20.908359025193278
+    },
+    "folded_q": 0.95,
+    "n_snaps": 5,
+    "preliminary": false
+  },
+  "C": {
+    "data": "data/1Nhp6A_apo_large",
+    "method": "c(t)-reweighted 2D PMF",
+    "helix": "total",
+    "bins": [
+      140,
+      92
+    ],
+    "kde_bw": [
+      0.01,
+      0.8
+    ],
+    "n_snaps": 5,
+    "preliminary": false,
+    "medoids": {
+      "source": "analysis/snapshots/1Nhp6A_apo_large_helicity_medoids_cvs.dat",
+      "structures": [
+        "state_1_medoid.pdb",
+        "state_2_medoid.pdb"
+      ],
+      "segmented": "2026-08-06 on the 1250 ns/walker (6 walkers, 7.5 us aggregate) c(t)-reweighted panel-C surface F(total_helicity, q_core), exported by `article_data.py --export-seg-fes` from C_pmf2d_qcore_total.dat (std<=10 kJ/mol, >=5 visits mask; 3132 reliable bins, up from 2363 at 1000 ns)",
+      "command": "python analysis/scripts/article_data.py --export-seg-fes && python select_snapshots.py --system 1Nhp6A_apo_large_helicity --f-ceil 25 --barrier 5 --delta-f 3 --t-max-ns 900 --fig-version 2 --shoulder 33.75,0.85,2.0,0.0275",
+      "medoid_definition": "min mean heavy-atom RMSD frame among 15 Boltzmann-weighted representatives of the region",
+      "n_basins": 1,
+      "frame_source_caveat": "IMPORTANT provenance mismatch: the FES is built from the full 1250 ns/walker colvar, but the structures are drawn from data/1Nhp6A_apo_large/replica_*/..._proc.xtc, which cover 0-1000 ns only (5001 frames, 200 ps, 1539 atoms, protein-only), and --t-max-ns 900 narrows the candidate pool further to 0-900 ns. So these are representative frames taken from the first 900 ns of a surface estimated over 1250 ns. This is acceptable because a medoid is a representative structure, not an estimator, and the 2D minimum did not move between 1000 and 1250 ns (panel A: q_core 0.998, n_IDR-core 8.2 at both lengths; panel C basin minimum helicity 39.75 -> 39.25 at q_core 0.9975, i.e. one grid cell). Extending the pool would require rebuilding _proc.xtc to 1250 ns.",
+      "entries": {
+        "1": {
+          "kind": "basin",
+          "q_core": 0.9674,
+          "total_helicity": 38.0549,
+          "replica": 0,
+          "time_ps": 697999.8,
+          "region_mean_std": {
+            "total_helicity": [
+              39.1331,
+              0.8278
+            ],
+            "q_core": [
+              0.9898,
+              0.0143
+            ],
+            "helix1": [
+              9.1574,
+              0.4379
+            ],
+            "helix2": [
+              8.8537,
+              0.3315
+            ],
+            "helix3": [
+              21.122,
+              0.6182
+            ]
+          },
+          "n_member_frames": 6299,
+          "population_percent": 95.17,
+          "q_bh": 0.9122
+        },
+        "2": {
+          "kind": "SHOULDER (not a basin)",
+          "q_core": 0.8364,
+          "total_helicity": 32.2939,
+          "replica": 4,
+          "time_ps": 555999.8,
+          "region_mean_std": {
+            "total_helicity": [
+              33.2332,
+              1.0942
+            ],
+            "q_core": [
+              0.8547,
+              0.0141
+            ],
+            "helix1": [
+              7.9377,
+              1.2246
+            ],
+            "helix2": [
+              4.9386,
+              1.7983
+            ],
+            "helix3": [
+              20.3568,
+              1.8496
+            ]
+          },
+          "n_member_frames": 3948,
+          "saddle_prominence_kJmol": 1.271,
+          "saddle_prominence_kBT": 0.509,
+          "population_percent": 4.83,
+          "population_percent_fixed_window": 2.89,
+          "surface_std_at_min_kJmol": 6.96,
+          "q_bh": 0.8109
+        }
+      },
+      "note": "Entry 1 is the folded basin -- the ONLY basin on this surface: the watershed at --barrier 5 (and at 2 and 3) returns exactly one. Entry 2 is a SHOULDER, NOT a metastable state, and must never be called one. At 1250 ns the raw watershed still resolves it as a local minimum at (helicity 32.75, q_core 0.8625), F = 9.53 kJ/mol above the folded minimum, but its saddle prominence is only 1.271 kJ/mol = 0.509 kBT while the surface's own cross-snapshot std there is 6.96 kJ/mol -- the prominence is ~5.5x below the error on the surface. Because --barrier 5 correctly merges it away, its representative is extracted with the explicit --shoulder window instead. Change vs 1000 ns: the shoulder got SHALLOWER, not sharper (prominence 1.525 -> 1.271 kJ/mol, 0.611 -> 0.509 kBT) while its population grew (watershed region 2.84 -> 4.83 %; same fixed CV window 2.09 -> 2.89 %). The extra 250 ns therefore did not resolve it into a state -- consistent with the rest of the apo 1250 ns gate, where the +250 ns bought no new q_core round-trips.",
+      "character": "helix-2-only melting. Over the 15 representatives of each region: helix2 8.85+/-0.33 (folded) vs 4.94+/-1.80 (shoulder); helix1 9.16+/-0.44 vs 7.94+/-1.22; helix3 21.12+/-0.62 vs 20.36+/-1.85 -- H3 essentially intact. The two medoid structures differ by 0.505 nm CA RMSD over the H1-H3 core (plumed residues 27-91).",
+      "vs_1000ns_medoids": "Both medoids moved, because the candidate pool and the basin core both changed. Basin: replica 0 t=280200.2 ps (helicity 39.6053, q_core 1.0000) -> replica 0 t=697999.8 ps (38.0549, 0.9674); the two structures differ by 0.697 nm heavy-atom RMSD overall but only 0.158 nm CA RMSD over the H1-H3 core -- the difference is entirely the disordered N-terminal IDR, so the folded basin representative is structurally equivalent. Shoulder: replica 3 t=307200.0 ps (34.6924, 0.8789) -> replica 4 t=555999.8 ps (32.2939, 0.8364); 0.786 nm heavy-atom / 0.505 nm core CA RMSD, i.e. genuinely a different conformer, as expected for a broad, weakly populated, partially melted region whose representative is not well defined. 1000 ns versions archived in analysis/backup_1Nhp6A_apo_large_1000ns/.",
+      "structural_pool": "data/1Nhp6A_apo_large/replica_*/1Nhp6A_parambsc1_tip3p_ions0.15_meta_2D_r*_proc.xtc (protein-only, 0-1000 ns, 200 ps, 5001 frames, 1539 atoms); candidates capped at 900 ns by --t-max-ns, ~10,554 on-grid candidate rows per walker, all 6 walkers pooled",
+      "representatives": {
+        "per_region": 15,
+        "sampling": "frames drawn without replacement with probability proportional to exp(-(F-Fmin)/kBT) within the region core {F < Fmin + 3 kJ/mol}, on the c(t)-reweighted panel-C surface",
+        "files": [
+          "analysis/snapshots/1Nhp6A_apo_large_helicity/state_1.xtc",
+          "analysis/snapshots/1Nhp6A_apo_large_helicity/state_2.xtc"
+        ],
+        "cv_table": "analysis/snapshots/1Nhp6A_apo_large_helicity_states_cvs.dat",
+        "walkers_contributing": {
+          "1": [
+            0,
+            4,
+            5
+          ],
+          "2": [
+            3,
+            4,
+            5
+          ]
+        }
+      },
+      "figures": [
+        "figures/1Nhp6A_apo_large_helicity_fes2d_basins_v2.png",
+        "figures/1Nhp6A_apo_large_helicity_fes2d_states_v2.png"
+      ],
+      "q_bh_note": "q_bh = canonical Best-Hummer Q evaluated on the medoid STRUCTURE (heavy, 0.45 nm, lambda=1.8), matching the Q_BH PMF panels; agrees with the per-frame cache to 4 dp. Coordinates only -- the basin/shoulder segmentation is still the q_core one. Source of truth is the q_bh column of C_medoids_cvs.dat."
+    },
+    "ns_per_walker": 1250.0,
+    "walkers": 6
+  },
+  "D": {
+    "DNA": {
+      "data": "data/DNA_wall2",
+      "label": "DNA alone",
+      "ns_per_walker": 100.0,
+      "method": "final-bias reweighted, snapshot mean+/-std",
+      "ess": 779713.0619039004,
+      "ess_percent": 52.0,
+      "gate_mad_de2e": 0.75,
+      "gate_pass": true,
+      "preliminary": false
+    },
+    "holo": {
+      "data": "data/1Nhp6A_wall",
+      "label": "Nhp6A:DNA",
+      "ns_per_walker": 300.0,
+      "method": "final-bias reweighted, snapshot mean+/-std",
+      "ess": 2719202.644602434,
+      "ess_percent": 30.2,
+      "gate_mad_de2e": 1.59,
+      "gate_pass": true,
+      "preliminary": false
+    },
+    "idr": {
+      "data": "data/1IDR_wall",
+      "label": "IDR:DNA",
+      "ns_per_walker": 400.0,
+      "method": "final-bias reweighted, snapshot mean+/-std",
+      "ess": 3622648.522673379,
+      "ess_percent": 30.2,
+      "gate_mad_de2e": 0.64,
+      "gate_pass": true,
+      "preliminary": false
+    },
+    "d2_10": {
+      "data": "data/1D2_10_wall",
+      "label": "\u03942-10:DNA",
+      "ns_per_walker": 350.0,
+      "method": "final-bias reweighted, snapshot mean+/-std",
+      "ess": 2027981.4619819087,
+      "ess_percent": 19.3,
+      "gate_mad_de2e": 4.3,
+      "gate_pass": false,
+      "preliminary": false
+    }
+  },
+  "E": {
+    "data": "data/1Nhp6A_wall",
+    "method": "final-bias reweighted 2D PMF",
+    "n_snaps": 5
+  },
+  "F1": {
+    "data": "data/equil/2Nhp6A/rep0",
+    "ns": 250.0,
+    "method": "unbiased equilibrium MD; H3 = 1LWM Pro64-Ala93",
+    "mean_std": {
+      "HMG helicity A": [
+        0.762,
+        0.039
+      ],
+      "H3 helicity A": [
+        0.878,
+        0.076
+      ],
+      "H3 RMSD (nm) A": [
+        0.241,
+        0.072
+      ],
+      "H3 kink (deg) A": [
+        45.239,
+        17.359
+      ],
+      "H3 displacement (nm) A": [
+        0.555,
+        0.197
+      ],
+      "HMG helicity B": [
+        0.704,
+        0.063
+      ],
+      "H3 helicity B": [
+        0.751,
+        0.126
+      ],
+      "H3 RMSD (nm) B": [
+        0.484,
+        0.208
+      ],
+      "H3 kink (deg) B": [
+        43.95,
+        21.901
+      ],
+      "H3 displacement (nm) B": [
+        1.459,
+        0.748
+      ]
+    },
+    "note": "MetaD 2Nhp6A excluded by design: reweighting gate fails (ESS~0%, MAD=4.7 kJ/mol)"
+  },
+  "F2": {
+    "systems": {
+      "DNA_wall": {
+        "n_frames": 1875003,
+        "mean": 10.21,
+        "std": 4.91,
+        "median": 9.81
+      },
+      "1Nhp6A_wall": {
+        "n_frames": 3750003,
+        "mean": 32.34,
+        "std": 9.13,
+        "median": 34.45
+      },
+      "2Nhp6A": {
+        "n_frames": 3750003,
+        "mean": 14.6,
+        "std": 5.71,
+        "median": 14.16
+      }
+    },
+    "method": "unbiased equilibrium MD, raw histograms",
+    "complete": true,
+    "missing": []
+  },
+  "flags": [
+    "2Nhp6A MetaD excluded by design (reweighting gate fails: ESS~0%, MAD=4.7 kJ/mol); panel F uses unbiased equilibrium MD only."
+  ],
+  "panels_last_run": {
+    "A": "2026-08-06 10:39",
+    "B": "2026-08-06 10:39",
+    "C": "2026-08-06 10:39",
+    "D": "2026-11-05 18:35",
+    "E": "2026-07-31 12:13",
+    "F": "2026-07-31 13:10",
+    "C_medoids": "2026-08-06 11:45",
+    "M": "2026-11-06 19:38"
+  },
+  "F1_replicates": {
+    "rep0": "analysis/article/F1_equil_2Nhp6A_h3_rep0.dat",
+    "rep1": "analysis/article/F1_equil_2Nhp6A_h3_rep1.dat",
+    "rep2": "analysis/article/F1_equil_2Nhp6A_h3_rep2.dat"
+  },
+  "M_1to1": {
+    "data": "data/mstate/md",
+    "t_max_ns": 250.0,
+    "runs": {
+      "c0_rep0": 250.0,
+      "c0_rep1": 250.0,
+      "c1_rep0": 250.0,
+      "c1_rep1": 250.0,
+      "c3_rep0": 250.0,
+      "c3_rep1": 250.0,
+      "c4_rep0": 250.0,
+      "c4_rep1": 250.0
+    }
+  },
+  "M_2to1": {
+    "data": "data/mstate_2Nhp6A/md",
+    "t_max_ns": 250.0,
+    "runs": {
+      "c1_rep0": 250.0,
+      "c1_rep1": 250.0,
+      "c3_rep0": 250.0,
+      "c3_rep1": 250.0
+    }
+  },
+  "M_holo": {
+    "1Nhp6A_holo_rep0_A": [
+      1.464,
+      1.538,
+      1.609
+    ],
+    "1Nhp6A_holo_rep1_A": [
+      1.468,
+      1.563,
+      1.654
+    ],
+    "1Nhp6A_holo_rep2_A": [
+      1.451,
+      1.547,
+      1.659
+    ],
+    "2Nhp6A_rep0_A": [
+      1.343,
+      1.438,
+      1.516
+    ],
+    "2Nhp6A_rep0_B": [
+      1.872,
+      2.28,
+      2.58
+    ],
+    "2Nhp6A_rep1_A": [
+      1.44,
+      1.544,
+      1.66
+    ],
+    "2Nhp6A_rep1_B": [
+      1.768,
+      1.868,
+      1.961
+    ],
+    "2Nhp6A_rep2_A": [
+      1.393,
+      1.493,
+      1.582
+    ],
+    "2Nhp6A_rep2_B": [
+      1.621,
+      1.705,
+      1.835
+    ]
+  },
+  "M_pc1": {
+    "basis": "analysis/mstate_probe/2Nhp6A_mstate_md_mmcompare_v2.npz",
+    "n_rows": 57523
+  },
+  "M_modes": {
+    "source": "analysis/mstate_probe/1Nhp6A_mstate_md_qnative_t250ns.dat",
+    "t_max_ns": 250.0,
+    "labels": {
+      "c0_rep0": "non-native",
+      "c0_rep1": "native",
+      "c1_rep0": "non-native",
+      "c1_rep1": "shifted",
+      "c3_rep0": "native",
+      "c3_rep1": "non-native",
+      "c4_rep0": "shifted",
+      "c4_rep1": "non-native"
+    }
+  }
+}
