@@ -4,9 +4,9 @@
 # data/1Nhp6A_apo_large/, and generates a 6-walker PLUMED input with the
 # rmsd_core wall at 0.5 nm and per-helix ALPHARMSD (monitored only).
 #
-# EM/NVT/NPT and the production grompp need no PLUMED, so an un-patched GROMACS
-# is sufficient here; the metadynamics itself is launched separately with the
-# PLUMED-patched build.
+# Runs LOCALLY on rubisco. EM/NVT/NPT and the production grompp need no PLUMED,
+# so the un-patched local GROMACS 2024.1 is sufficient; the MetaD itself is
+# submitted separately on calmodulin (slurm_meta_2D_1Nhp6A_large.sh).
 #
 # Run from the project root.
 set -e
@@ -76,7 +76,7 @@ out="${base}/${sys}_${ff}_${wat}_ions${ions}_npt"
 gmx grompp -f "${mdp}" -c "${inp}" -p "${top}" -r "${inp}" -o "${out}" -maxwarn 1
 gmx mdrun -v -ntmpi 2 -ntomp 1 -s "${out}" -deffnm "${out}"
 
-# --- Production TPR (metadynamics launched separately) ---
+# --- Production TPR (metadynamics launched separately by SLURM on calmodulin) ---
 mdp="data/mdp/md.mdp"
 inp="${out}"
 out="${base}/${sys}_${ff}_${wat}_ions${ions}_md"
@@ -97,8 +97,8 @@ echo "Protein" | gmx trjconv \
 python3 gen_plumed_inputs.py "${sys}_${ff}_${tag}.pdb" ${sys} \
     --walkers 6 --rmsd-wall 0.5 --helices 27-42,48-61,64-91 --out-tag ${tag}
 
-echo "Next: launch the 6 walkers with plumed_meta_2D_${sys}_${tag}.dat, keeping"
-echo "      data/${sys}_apo_${tag}/, ref_core_ca_${sys}_${tag}.pdb and"
-echo "      ${sys}_${ff}_${tag}.pdb alongside the production TPR."
+echo "Next: rsync data/${sys}_apo_${tag}/ + plumed_meta_2D_${sys}_${tag}.dat +"
+echo "      ref_core_ca_${sys}_${tag}.pdb + ${sys}_${ff}_${tag}.pdb to calmodulin,"
+echo "      then submit slurm_meta_2D_${sys}_${tag}.sh there."
 
 rm -f \#* "${base}/"\#*

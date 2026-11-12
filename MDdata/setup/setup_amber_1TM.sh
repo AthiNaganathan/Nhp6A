@@ -1,7 +1,7 @@
 #!/bin/bash
 # Setup 1TM (triple mutant S26D+S41D+T63D) + DNA binary complex for 2D WT-MetaD.
 # Follows the same protocol as setup_amber_1S26D.sh.
-# Run from the project root.
+# Run from project root on calmodulin.
 set -e
 
 # ---------------------------------------------------------------------------

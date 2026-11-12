@@ -2,7 +2,7 @@
 # Setup protein-only (apo) 1T63D for 2D WT-MetaD.
 # Strips DNA from the binary ions0.15.gro, builds a new octahedral box,
 # solvates, adds ions, runs EM/NVT/NPT, and generates the PLUMED input.
-# Run from the project root.
+# Run from project root on calmodulin.
 set -e
 
 source /opt/gromacs/2024.2-plumed/bin/GMXRC.bash

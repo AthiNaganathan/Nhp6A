@@ -3,7 +3,7 @@
 # Starts from the existing pdb2gmx output (data/1S26D/1S26D_DNA_parambsc1_tip3p.gro)
 # and reruns editconf onward. Outputs go to data/1S26D_large/.
 #
-# Run from the project root.
+# Run from the project root on calmodulin.
 set -e
 
 source /opt/gromacs/2024.2-plumed/bin/GMXRC.bash

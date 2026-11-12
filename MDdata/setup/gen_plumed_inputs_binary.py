@@ -24,7 +24,7 @@ tail/coord_tail_dna CV is generated per chain, suffixed by chain id
 biased together in the METAD ARG list.
 
 CONTACT MAP — NOT generated here:
-    The DNA inter-strand CONTACTMAP block must come from contact_map_setup.ipynb,
+    The DNA inter-strand CONTACTMAP block must come from notebooks/contact_map_setup.ipynb,
     which is the canonical, consistent protocol (all DNA atoms incl. H, residue
     separation > 3, cutoff 0.30 nm, LAMBDA=1.4). It produces
     <system_name>_DNA_parambsc1_cmap.{txt,dat}. Paste the `cmap: CONTACTMAP ...`
@@ -192,7 +192,7 @@ def main():
         f.write("\n")
         f.write("## restraint on DNA double-helix integrity (inter-strand contacts)\n")
         f.write("## >>> PASTE the `cmap: CONTACTMAP ... SUM ...` block here <<<\n")
-        f.write(f"## Generate it with contact_map_setup.ipynb (canonical protocol):\n")
+        f.write(f"## Generate it with notebooks/contact_map_setup.ipynb (canonical protocol):\n")
         f.write(f"##   all DNA atoms incl. H, residue separation > 3, cutoff 0.30 nm, LAMBDA=1.4\n")
         f.write(f"## Source file: {cmapdat}  (omit its trailing PRINT line when pasting).\n")
         f.write("\n")
@@ -231,7 +231,7 @@ def main():
     print(f"  dna_end2: {len(end2_b)} atoms (last nt chain {dna_chains[0]}) + {len(end2_c)} (first nt chain {dna_chains[1]})")
     print(f"  METAD ARG ({n_cv}D): {','.join(metad_args)}")
     print()
-    print(f"Contact map NOT generated here — use contact_map_setup.ipynb to produce")
+    print(f"Contact map NOT generated here — use notebooks/contact_map_setup.ipynb to produce")
     print(f"  {cmapdat}, then paste its `cmap: CONTACTMAP ... SUM ...` block into {outdat}.")
     print(f"Next: symlink {ref_pdb} into each replica directory before running metadynamics.")
 

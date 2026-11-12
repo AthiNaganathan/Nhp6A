@@ -2,7 +2,7 @@
 # Setup protein-only (apo) 1TM for 2D WT-MetaD.
 # Strips DNA from the binary ions0.15.gro, builds a new octahedral box,
 # solvates, adds ions, runs EM/NVT/NPT, and generates the PLUMED input.
-# Run from the project root.
+# Run from project root on rubisco.
 set -e
 
 source /usr/local/gromacs/2024.1/bin/GMXRC.bash
@@ -85,6 +85,6 @@ echo "Protein" | gmx trjconv \
 # --- Generate PLUMED input ---
 python3 gen_plumed_inputs.py "${sys}_${ff}.pdb" ${sys}
 
-echo "Next: launch the walkers with plumed_meta_2D_${sys}_apo.dat"
+echo "Next: rsync to calmodulin and submit with slurm_meta_2D_${sys}_apo.sh"
 
 rm -f \#* "${base}/"\#*

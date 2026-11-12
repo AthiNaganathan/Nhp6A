@@ -3,7 +3,7 @@
 # Strips DNA from the binary ions0.15 GRO, builds a new octahedral box,
 # solvates, adds ions, runs EM/NVT/NPT, and generates the PLUMED input.
 # Follows the same protocol as setup_1S26D.sh.
-# Run from the project root AFTER setup_amber_1TM.sh completes.
+# Run from project root on calmodulin AFTER setup_amber_1TM.sh completes.
 set -e
 
 source /opt/gromacs/2024.2-plumed/bin/GMXRC.bash
